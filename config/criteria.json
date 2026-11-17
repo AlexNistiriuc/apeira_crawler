@@ -1,0 +1,15 @@
+{
+  "_nota": "Criteri rigidi di Alex (16 nov 2026). Unico posto dove cambiare le soglie: li leggono sia il crawler (prefiltro) sia i classificatori.",
+  "min_founded_year": 2025,
+  "max_founded_year": 2026,
+  "domain_young_from": "2024-01-01",
+  "domain_border_from": "2023-01-01",
+  "wayback_old_before_year": 2022,
+  "max_grants_usd": 1000000,
+  "max_outside_investment_usd": 500000,
+  "max_team_size": 5,
+  "max_founder_age": 34,
+  "priority_founder_age": 29,
+  "fx_to_usd": { "eur": 1.1, "€": 1.1, "euro": 1.1, "euros": 1.1, "usd": 1, "$": 1, "dollars": 1, "gbp": 1.3, "£": 1.3, "chf": 1.15 },
+  "sectors": ["Quantum", "Chip/Compute", "Fusion/Energy", "Robotics/Physical AI", "Space", "Biotech", "AI/Foundation models", "Materials/Hardware", "Defense"]
+}

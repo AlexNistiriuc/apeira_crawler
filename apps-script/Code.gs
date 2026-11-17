@@ -1,0 +1,297 @@
+/**
+ * Apeira scouting: API del foglio-database.
+ *
+ * Installazione (una volta sola, dal foglio pool_founder_startup):
+ *   Estensioni > Apps Script > incolla questo file > Salva
+ *   Esegui la funzione setup()  -> crea i tab db_*, il tab Classifica e il token (lo trovi nel log)
+ *   Esegui il deploy > Nuovo deployment > App web > Esegui come: me > Chi può accedere: chiunque
+ *   L'URL che finisce con /exec è SHEET_API_URL, il token è SHEET_API_TOKEN.
+ *
+ * Tutte le richieste: POST con corpo JSON {token, action, ...}.
+ * Solo lettura anche via GET: ?token=...&action=queue&classifier=claude&limit=30&rank_by=euristico
+ *
+ * Azioni: read, upsert, append, queue, views, ping.
+ * Il foglio è il database: i tab db_* sono scritti dai programmi, Classifica è la vista per le persone.
+ */
+
+// Deve coincidere con contracts/schema.json (lo controlla test/apps-script.test.js).
+var SCHEMA = {
+  db_hub: { key: 'hub_id', columns: ['hub_id', 'nome', 'url', 'origine', 'tipo', 'stato', 'priorita', 'scoperto_il', 'note', 'ultimo_crawl', 'pagine_lette', 'candidati_trovati', 'candidati_da_valutare', 'cursore'] },
+  db_candidati: { key: 'dominio', columns: ['dominio', 'nome', 'sito', 'hub_origine', 'primo_visto', 'ultimo_check', 'stato_crawler', 'motivo', 'dominio_registrato', 'primo_archivio', 'anni_sul_sito', 'settori', 'punteggio_deep', 'europa', 'segnali_funding', 'email', 'linkedin_azienda', 'linkedin_persone', 'founder_nomi', 'team_stima', 'descrizione', 'domanda_reale', 'evidenze', 'pagine_lette', 'versione_crawler', 'snowball_il'] },
+  db_valutazioni: { key: 'id', columns: ['id', 'dominio', 'classificatore', 'versione', 'valutato_il', 'esito', 'fit', 'voto', 'motivo', 'fondazione', 'grant', 'investimenti', 'accesso_lab', 'team', 'eta_founder', 'under30', 'domanda_reale', 'da_verificare', 'fonti', 'nota_alex'] },
+  db_log: { key: null, columns: ['componente', 'inizio', 'fine', 'statistiche'] }
+};
+var ENUMS = {
+  'db_valutazioni.esito': ['Qualificata', 'Needs verification', 'Esclusa'],
+  'db_valutazioni.fit': ['Alto', 'Medio', 'Basso'],
+  'db_candidati.stato_crawler': ['da_valutare', 'scartata', 'sito_morto', 'da_ricontrollare'],
+  'db_hub.stato': ['attivo', 'escluso_vc', 'escluso_junk', 'irraggiungibile', 'in_pausa']
+};
+var VIEW_TAB = 'Classifica';
+var MAX_CELL = 49000;
+
+// ---------------------------------------------------------------- ingresso
+
+function doPost(e) {
+  var body = {};
+  try { body = JSON.parse(e.postData.contents); } catch (err) { return out_({ ok: false, error: 'corpo non JSON' }); }
+  return out_(handle_(body, false));
+}
+
+function doGet(e) {
+  return out_(handle_(e.parameter || {}, true));
+}
+
+function handle_(p, readOnly) {
+  try {
+    var token = PropertiesService.getScriptProperties().getProperty('API_TOKEN');
+    if (!token || p.token !== token) return { ok: false, error: 'token non valido' };
+    var a = p.action;
+    if (readOnly && ['read', 'queue', 'ping'].indexOf(a) < 0) return { ok: false, error: 'via GET solo read, queue, ping' };
+    if (a === 'ping') return { ok: true, ora: new Date().toISOString() };
+    if (a === 'read') return { ok: true, rows: readRows_(p.tab, asList_(p.columns), p.where) };
+    if (a === 'queue') return { ok: true, rows: queue_(p.classifier, Number(p.limit || 200), p.rank_by) };
+    if (a === 'upsert') return withLock_(function () { return upsert_(p.tab, p.key, p.rows || []); });
+    if (a === 'append') return withLock_(function () { return append_(p.tab, p.rows || []); });
+    if (a === 'views') return withLock_(function () { return buildViews_(); });
+    return { ok: false, error: 'azione sconosciuta: ' + a };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message || err) };
+  }
+}
+
+function out_(o) {
+  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function asList_(x) {
+  if (!x) return null;
+  return Array.isArray(x) ? x : String(x).split(',');
+}
+
+function withLock_(fn) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(120000);
+  try { var r = fn(); r.ok = true; return r; } finally { lock.releaseLock(); }
+}
+
+// ---------------------------------------------------------------- setup
+
+function setup() {
+  var ss = SpreadsheetApp.getActive();
+  Object.keys(SCHEMA).forEach(function (name) { ensureTab_(ss, name, SCHEMA[name].columns); });
+  ensureTab_(ss, VIEW_TAB, VIEW_COLUMNS);
+  var props = PropertiesService.getScriptProperties();
+  if (!props.getProperty('API_TOKEN')) props.setProperty('API_TOKEN', Utilities.getUuid().replace(/-/g, ''));
+  if (!props.getProperty('PRECEDENZA')) props.setProperty('PRECEDENZA', 'claude,euristico');
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'buildViews') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('buildViews').timeBased().everyHours(1).create();
+  Logger.log('Token API (SHEET_API_TOKEN): ' + props.getProperty('API_TOKEN'));
+}
+
+function ensureTab_(ss, name, cols) {
+  var sh = ss.getSheetByName(name);
+  if (!sh) sh = ss.insertSheet(name);
+  if (sh.getLastRow() === 0) {
+    sh.getRange(1, 1, 1, cols.length).setValues([cols]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  // tutto testo: niente conversioni automatiche di date e numeri
+  sh.getRange(1, 1, sh.getMaxRows(), Math.max(sh.getMaxColumns(), cols.length)).setNumberFormat('@');
+  return sh;
+}
+
+// ---------------------------------------------------------------- tabelle
+
+function sheet_(tab) {
+  if (!SCHEMA[tab] && tab !== VIEW_TAB) throw new Error('tab non ammesso: ' + tab);
+  var sh = SpreadsheetApp.getActive().getSheetByName(tab);
+  if (!sh) throw new Error('manca il tab ' + tab + ': esegui setup()');
+  return sh;
+}
+
+function table_(sh) {
+  var lr = sh.getLastRow(), lc = sh.getLastColumn();
+  if (lr === 0) return { head: [], data: [] };
+  var all = sh.getRange(1, 1, lr, lc).getValues();
+  return { head: all[0].map(String), data: all.slice(1) };
+}
+
+function readRows_(tab, columns, where) {
+  var t = table_(sheet_(tab));
+  var idx = {};
+  t.head.forEach(function (h, i) { idx[h] = i; });
+  var cols = columns && columns.length ? columns.filter(function (c) { return idx[c] !== undefined; }) : t.head;
+  var w = where ? (typeof where === 'string' ? JSON.parse(where) : where) : null;
+  var rows = [];
+  for (var r = 0; r < t.data.length; r++) {
+    var row = t.data[r];
+    if (w && !Object.keys(w).every(function (k) { return idx[k] !== undefined && String(row[idx[k]]) === String(w[k]); })) continue;
+    var o = {};
+    cols.forEach(function (c) { o[c] = String(row[idx[c]]); });
+    rows.push(o);
+  }
+  return rows;
+}
+
+function validate_(tab, row) {
+  Object.keys(row).forEach(function (k) {
+    var en = ENUMS[tab + '.' + k];
+    if (en && row[k] !== '' && row[k] != null && en.indexOf(String(row[k])) < 0) throw new Error(tab + '.' + k + ' non valido: ' + row[k]);
+  });
+  if (tab === 'db_valutazioni') {
+    if (!row.dominio || !row.classificatore || row.id !== row.dominio + '|' + row.classificatore) throw new Error('db_valutazioni: id deve essere dominio|classificatore');
+    var v = Number(row.voto);
+    if (row.voto !== undefined && !(v >= 0 && v <= 100)) throw new Error('db_valutazioni: voto fuori da 0-100');
+  }
+}
+
+function cell_(v) {
+  if (v === null || v === undefined) return '';
+  var s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+  return s.length > MAX_CELL ? s.slice(0, MAX_CELL) : s;
+}
+
+/** Aggiunge in fondo le colonne che mancano (schema che cresce senza rompere i dati). */
+function ensureColumns_(sh, head, names) {
+  var missing = names.filter(function (n) { return head.indexOf(n) < 0; });
+  if (!missing.length) return head;
+  var start = head.length + 1;
+  if (sh.getMaxColumns() < head.length + missing.length) sh.insertColumnsAfter(sh.getMaxColumns(), head.length + missing.length - sh.getMaxColumns());
+  sh.getRange(1, start, 1, missing.length).setValues([missing]).setFontWeight('bold');
+  sh.getRange(1, start, sh.getMaxRows(), missing.length).setNumberFormat('@');
+  return head.concat(missing);
+}
+
+function upsert_(tab, key, rows) {
+  if (!SCHEMA[tab]) throw new Error('tab non ammesso: ' + tab);
+  if (key !== SCHEMA[tab].key) throw new Error('la chiave di ' + tab + ' è ' + SCHEMA[tab].key);
+  var sh = sheet_(tab);
+  var t = table_(sh);
+  var fields = {};
+  rows.forEach(function (r) { validate_(tab, r); Object.keys(r).forEach(function (k) { fields[k] = 1; }); });
+  var head = ensureColumns_(sh, t.head, Object.keys(fields));
+  var idx = {};
+  head.forEach(function (h, i) { idx[h] = i; });
+  var ki = idx[key];
+  var pos = {};
+  for (var r = 0; r < t.data.length; r++) pos[String(t.data[r][ki])] = r;
+
+  var inserts = [], updated = 0, seen = {};
+  rows.forEach(function (row) {
+    var k = String(row[key] || '');
+    if (!k) return;
+    if (pos[k] !== undefined) {
+      var cur = t.data[pos[k]];
+      while (cur.length < head.length) cur.push('');
+      Object.keys(row).forEach(function (f) { cur[idx[f]] = cell_(row[f]); });
+      seen[pos[k]] = cur;
+      updated++;
+    } else if (seen['new:' + k]) {
+      Object.keys(row).forEach(function (f) { seen['new:' + k][idx[f]] = cell_(row[f]); });
+    } else {
+      var arr = head.map(function (h) { return cell_(row[h]); });
+      seen['new:' + k] = arr;
+      inserts.push(arr);
+    }
+  });
+  Object.keys(seen).forEach(function (r) {
+    if (r.indexOf('new:') === 0) return;
+    sh.getRange(Number(r) + 2, 1, 1, head.length).setValues([seen[r]]);
+  });
+  if (inserts.length) {
+    var start = sh.getLastRow() + 1;
+    if (sh.getMaxRows() < start + inserts.length) sh.insertRowsAfter(sh.getMaxRows(), start + inserts.length - sh.getMaxRows());
+    sh.getRange(start, 1, inserts.length, head.length).setNumberFormat('@').setValues(inserts);
+  }
+  return { inserted: inserts.length, updated: updated };
+}
+
+function append_(tab, rows) {
+  if (!SCHEMA[tab] || SCHEMA[tab].key) throw new Error('append solo su tab senza chiave (db_log)');
+  var sh = sheet_(tab);
+  var head = table_(sh).head;
+  if (!rows.length) return { inserted: 0 };
+  var vals = rows.map(function (r) { return head.map(function (h) { return cell_(r[h]); }); });
+  sh.getRange(sh.getLastRow() + 1, 1, vals.length, head.length).setNumberFormat('@').setValues(vals);
+  return { inserted: vals.length };
+}
+
+/**
+ * Candidati da_valutare senza valutazione di quel classificatore, o valutati prima dell'ultimo controllo.
+ * rank_by (facoltativo): nome di un altro classificatore. Mette prima i candidati con il suo voto più alto,
+ * salta quelli che lui ha escluso e aggiunge a ogni riga il suo giudizio (pre_esito, pre_fit, pre_voto, pre_motivo).
+ */
+function queue_(classifier, limit, rankBy) {
+  if (!classifier) throw new Error('serve classifier');
+  var done = {}, pre = {};
+  readRows_('db_valutazioni', ['dominio', 'classificatore', 'valutato_il', 'esito', 'fit', 'voto', 'motivo']).forEach(function (v) {
+    if (v.classificatore === classifier) done[v.dominio] = v.valutato_il;
+    if (rankBy && v.classificatore === rankBy) pre[v.dominio] = v;
+  });
+  var rows = readRows_('db_candidati', null, { stato_crawler: 'da_valutare' }).filter(function (c) {
+    if (rankBy && pre[c.dominio] && pre[c.dominio].esito === 'Esclusa') return false;
+    return done[c.dominio] === undefined || String(done[c.dominio]) < String(c.ultimo_check);
+  });
+  if (rankBy) rows.forEach(function (c) {
+    var v = pre[c.dominio];
+    c.pre_esito = v ? v.esito : ''; c.pre_fit = v ? v.fit : ''; c.pre_voto = v ? v.voto : ''; c.pre_motivo = v ? v.motivo : '';
+  });
+  rows.sort(function (a, b) {
+    var d = rankBy ? (Number(b.pre_voto) || -1) - (Number(a.pre_voto) || -1) : 0;
+    return d || String(b.ultimo_check).localeCompare(String(a.ultimo_check));
+  });
+  return rows.slice(0, limit);
+}
+
+// ---------------------------------------------------------------- vista per le persone
+
+var VIEW_COLUMNS = ['Startup', 'Sito', 'Esito', 'Under 30', 'Fit', 'Voto', 'Motivo', 'Valutata da', 'Settori', 'Europa', 'Fondazione', 'Grant', 'Investimenti esterni', 'Accesso lab', 'Team', 'Età founder', 'Domanda reale', 'Da verificare', 'Email', 'LinkedIn azienda', 'Founder (nomi)', 'Pool di provenienza', 'Descrizione', 'Nota Alex'];
+
+/**
+ * Ricostruisce il tab Classifica: una riga per startup, con la valutazione del classificatore che ha la precedenza
+ * (proprietà PRECEDENZA, default "claude,euristico"). Gira ogni ora. Le note in colonna "Nota Alex" si conservano.
+ */
+function buildViews() {
+  return withLock_(function () { return buildViews_(); });
+}
+
+function buildViews_() {
+  var order = (PropertiesService.getScriptProperties().getProperty('PRECEDENZA') || 'claude,euristico').split(',');
+  var best = {};
+  readRows_('db_valutazioni', null).forEach(function (v) {
+    var p = order.indexOf(v.classificatore); if (p < 0) p = order.length;
+    var cur = best[v.dominio];
+    if (!cur || p < cur._p) { v._p = p; best[v.dominio] = v; }
+  });
+  var rank = { 'Qualificata': 0, 'Needs verification': 1 }, frank = { Alto: 0, Medio: 1, Basso: 2 };
+  var CCOLS = ['dominio', 'nome', 'sito', 'settori', 'europa', 'email', 'linkedin_azienda', 'founder_nomi', 'hub_origine', 'descrizione', 'stato_crawler'];
+  var rows = readRows_('db_candidati', CCOLS, { stato_crawler: 'da_valutare' }).map(function (c) {
+    return { c: c, v: best[c.dominio] };
+  }).filter(function (x) { return x.v && x.v.esito !== 'Esclusa'; });
+  rows.sort(function (a, b) {
+    var ra = rank[a.v.esito] * 2 + (a.v.under30 === 'sì' ? 0 : 1), rb = rank[b.v.esito] * 2 + (b.v.under30 === 'sì' ? 0 : 1);
+    return ra - rb || frank[a.v.fit] - frank[b.v.fit] || Number(b.v.voto) - Number(a.v.voto);
+  });
+  var sh = SpreadsheetApp.getActive().getSheetByName(VIEW_TAB) || ensureTab_(SpreadsheetApp.getActive(), VIEW_TAB, VIEW_COLUMNS);
+  // le note scritte a mano in Classifica vengono salvate in db_valutazioni.nota_alex prima di ricostruire
+  var notes = {}, old = table_(sh), si = old.head.indexOf('Sito'), ni = old.head.indexOf('Nota Alex');
+  if (si >= 0 && ni >= 0) old.data.forEach(function (r) { if (String(r[ni]).trim()) notes[String(r[si])] = String(r[ni]); });
+  var save = [];
+  rows.forEach(function (x) {
+    var n = notes[x.c.sito];
+    if (n && n !== x.v.nota_alex) { x.v.nota_alex = n; save.push({ id: x.v.id, dominio: x.v.dominio, classificatore: x.v.classificatore, nota_alex: n }); }
+  });
+  if (save.length) upsert_('db_valutazioni', 'id', save);
+  var vals = rows.map(function (x) {
+    var c = x.c, v = x.v;
+    return [c.nome, c.sito, v.esito, v.under30, v.fit, v.voto, v.motivo, v.classificatore + ' ' + v.versione, c.settori, c.europa, v.fondazione, v.grant, v.investimenti, v.accesso_lab, v.team, v.eta_founder, v.domanda_reale, v.da_verificare, c.email, c.linkedin_azienda, c.founder_nomi, c.hub_origine, c.descrizione, v.nota_alex].map(cell_);
+  });
+  sh.clearContents();
+  sh.getRange(1, 1, 1, VIEW_COLUMNS.length).setValues([VIEW_COLUMNS]).setFontWeight('bold');
+  if (vals.length) {
+    if (sh.getMaxRows() < vals.length + 1) sh.insertRowsAfter(sh.getMaxRows(), vals.length + 1 - sh.getMaxRows());
+    sh.getRange(2, 1, vals.length, VIEW_COLUMNS.length).setValues(vals);
+  }
+  return { righe: vals.length };
+}

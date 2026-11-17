@@ -1,0 +1,17 @@
+{
+  "name": "apeira-crawler",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Scouting di startup deep tech europee appena nate. Crawler indipendenti che scrivono nel Google Sheet usato come database.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "hubs": "node src/crawlers/hubs/index.js",
+    "startups": "node src/crawlers/startups/index.js",
+    "classify": "node src/classifiers/run.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "cheerio": "1.0.0"
+  }
+}

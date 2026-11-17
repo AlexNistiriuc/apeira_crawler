@@ -1,0 +1,24 @@
+{
+  "_nota": "Fonti di partenza. Gli hub veri vivono nel tab db_hub del foglio: qui ci sono solo i semi e le reti di incubatori. Le righe con verificato=false vanno controllate al primo giro (se l'URL non risponde il crawler lo segna nel log e prosegue).",
+
+  "networks": [
+    { "label": "EBN", "sitemap": "https://ebn.eu/wp-sitemap-posts-member-1.xml", "verificato": false, "nota": "rete EU|BIC, 162 incubatori nella v1" },
+    { "label": "UKSPA", "sitemap": "https://www.ukspa.org.uk/member-sitemap.xml", "verificato": false, "nota": "parchi scientifici UK, 177 nella v1" }
+  ],
+
+  "directories": [
+    { "adapter": "eu-startups", "name": "EU-Startups directory", "url": "https://www.eu-startups.com/directory/", "max_pages_per_run": 400 },
+    { "adapter": "thehub", "name": "The Hub (Nordics)", "url": "https://thehub.io/startups", "max_pages_per_run": 400 }
+  ],
+
+  "seed_hubs": [
+    { "name": "YES!Delft", "url": "https://www.yesdelft.com/" },
+    { "name": "I3P Politecnico di Torino", "url": "https://www.i3p.it/" },
+    { "name": "PoliHub", "url": "https://www.polihub.it/" },
+    { "name": "Venture Kick", "url": "https://www.venturekick.ch/" },
+    { "name": "Biopole", "url": "https://www.biopole.ch/" },
+    { "name": "UnternehmerTUM", "url": "https://www.unternehmertum.de/" },
+    { "name": "CDTM", "url": "https://www.cdtm.com/" },
+    { "name": "Station F Founders Program", "url": "https://stationf.co/" }
+  ]
+}
