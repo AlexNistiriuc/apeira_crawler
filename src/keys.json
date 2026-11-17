@@ -1,0 +1,13 @@
+{
+ "worker.js": "apeira_src",
+ "boot.js": "apeira_boot",
+ "export/startup-export.js": "apeira_exp",
+ "export/pool-export.js": "apeira_poolexp",
+ "export/hub-export.js": "apeira_hubexp",
+ "snowball.js": "apeira_snow",
+ "miners/eu-startups.js": "apeira_miner",
+ "miners/startbase.js": "apeira_miner_sb",
+ "miners/thehub.js": "apeira_miner_hub",
+ "miners/sitemap.js": "apeira_miner_sm",
+ "miners/hub-of-hubs.js": "apeira_miner_hoh"
+}

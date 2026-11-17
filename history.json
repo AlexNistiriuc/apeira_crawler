@@ -1,0 +1,84 @@
+[
+ {
+  "t": "2026-11-15T07:33:33.571Z",
+  "cands": 10146,
+  "target": 290,
+  "maybe": 789,
+  "jina": 12271,
+  "alto": 38,
+  "medio": 263,
+  "note": "baseline prima delle modifiche v5 (priorità hub/siti, impressum)"
+ },
+ {
+  "t": "2026-11-15T08:27:22.608Z",
+  "cands": 11698,
+  "target": 339,
+  "maybe": 918,
+  "jina": 12995,
+  "proxy": 1654,
+  "note": "proxy+EU-Startups miner; startbase miner avviato"
+ },
+ {
+  "t": "2026-11-15T09:15:40.720Z",
+  "cands": 15277,
+  "target": 409,
+  "maybe": 1330,
+  "jina": 13592,
+  "proxy": 8589,
+  "note": "R2 deep pass + NA pool; EUS miner finito (275); wayback age check avviato"
+ },
+ {
+  "t": "2026-11-15T10:03:01.852Z",
+  "cands": 19252,
+  "target": 650,
+  "maybe": 1171,
+  "jina": 14335,
+  "proxy": 14419,
+  "note": "wayback age + R2: +240 target in 47 min (~306/h), 36 target/1000 pagine"
+ },
+ {
+  "t": "2026-11-15T13:03:28.642Z",
+  "cands": 19917,
+  "target": 875,
+  "maybe": 305,
+  "jina": 14344,
+  "proxy": 14769,
+  "note": "riavvio 13:58: lavoro esaurito da ~11:05 (hub R2 finiti, wayback finito). Nuove fonti: thehub.io miner, 78 AUTO hub da link dei siti target, auto-hub continuo"
+ },
+ {
+  "t": "2026-11-15T13:41:37.938Z",
+  "cands": 24665,
+  "target": 934,
+  "maybe": 304,
+  "proxy": 19329,
+  "note": "+144 target in 35 min ma con spazzatura da AUTO saashub: filtro JUNKHUB; The Hub finito (111); snowball 2"
+ },
+ {
+  "t": "2026-11-15T14:30",
+  "target": 934,
+  "maybe": 304,
+  "cands": 24944,
+  "note": "stallo 13:45-14:25 (ALL HUBS DONE); riavvio + mineSM"
+ },
+ {
+  "t": "2026-11-15T15:17",
+  "target": 1026,
+  "maybe": 385,
+  "cands": 28749,
+  "note": "fix rdap .nl hang + timeout, loopguard, watchdog"
+ },
+ {
+  "t": "2026-11-15T16:11",
+  "target": 1057,
+  "maybe": 799,
+  "cands": 31653,
+  "note": "fix wayback (ptfetch), watchdog v2, EBN 162 hub"
+ },
+ {
+  "t": "2026-11-15T18:00",
+  "target": 1154,
+  "maybe": 494,
+  "cands": 33636,
+  "note": "UKSPA 177 hub, 14 NEW hub (EIT Digital, ESA BIC x6, SATT x3...)"
+ }
+]
