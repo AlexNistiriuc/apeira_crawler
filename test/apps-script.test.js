@@ -17,7 +17,9 @@ test('Code.gs e contracts/schema.json hanno le stesse colonne', () => {
 
 test('setup crea i tab con intestazioni', () => {
   const { sheets } = loadGas();
-  for (const t of ['db_hub', 'db_candidati', 'db_valutazioni', 'db_log', 'Classifica']) assert.ok(sheets.get(t), t);
+  for (const t of ['db_hub', 'db_candidati', 'db_valutazioni', 'db_log', 'Startup trovate']) assert.ok(sheets.get(t), t);
+  assert.ok(sheets.get('db_hub').hidden, 'i tab tecnici sono nascosti');
+  assert.ok(!sheets.get('Startup trovate').hidden);
   assert.equal(sheets.get('db_hub').cells[0][0], 'hub_id');
 });
 
@@ -60,7 +62,7 @@ test('validazione: esito, voto e id dei classificatori', async () => {
   await assert.rejects(backend('upsert', { tab: 'db_candidati', key: 'nome', rows: [] }), /chiave/);
 });
 
-test('coda per classificatore e vista Classifica con note conservate', async () => {
+test('coda per classificatore e vista Startup trovate con note conservate', async () => {
   const { backend, sheets } = loadGas();
   await backend('upsert', { tab: 'db_candidati', key: 'dominio', rows: [
     { dominio: 'a.ai', sito: 'https://a.ai/', nome: 'A', stato_crawler: 'da_valutare', ultimo_check: '2026-11-17 10:00:00' },
@@ -85,13 +87,15 @@ test('coda per classificatore e vista Classifica con note conservate', async () 
   assert.deepEqual(q.map(x => x.dominio), ['a.ai']);
 
   await backend('views', {});
-  const cl = sheets.get('Classifica').cells;
+  const cl = sheets.get('Startup trovate').cells;
   assert.equal(cl.length, 2, 'solo a.ai: b.io è Esclusa, c.eu scartata dal crawler');
-  assert.equal(cl[1][2], 'Qualificata', 'vince claude per precedenza');
+  assert.equal(cl[1][cl[0].indexOf('Esito criteri rigidi')], 'Qualificata', 'vince claude per precedenza');
+  assert.equal(cl[1][2], 'Target', 'Stato come nella v1 per l\'outreach');
+  assert.deepEqual(cl[0].slice(0, 4), ['Startup', 'Sito', 'Stato', 'Fit']);
   // nota scritta a mano, poi ricostruzione
   cl[1][cl[0].indexOf('Nota Alex')] = 'chiamata fissata';
   await backend('views', {});
-  assert.equal(sheets.get('Classifica').cells[1][cl[0].indexOf('Nota Alex')], 'chiamata fissata');
+  assert.equal(sheets.get('Startup trovate').cells[1][cl[0].indexOf('Nota Alex')], 'chiamata fissata');
   const ev = (await backend('read', { tab: 'db_valutazioni' })).rows.find(x => x.id === 'a.ai|claude');
   assert.equal(ev.nota_alex, 'chiamata fissata');
 });

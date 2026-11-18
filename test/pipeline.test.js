@@ -1,5 +1,5 @@
 // Prova end to end senza rete: un finto web, il vero Code.gs su un finto Sheets,
-// crawler hub -> crawler startup -> classificatore euristico -> vista Classifica.
+// crawler hub -> crawler startup -> classificatore euristico -> vista Startup trovate.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -78,7 +78,8 @@ test('pipeline completa', async () => {
   const H = Object.fromEntries((await read('db_hub')).map(r => [r.hub_id, r]));
   assert.equal(H['hub-alpha.eu'].candidati_da_valutare, '1');
   assert.ok(H['hub-alpha.eu'].ultimo_crawl);
-  assert.equal(H['yesdelft.com'].stato, 'irraggiungibile');
+  assert.equal(H['yesdelft.com'].stato, 'attivo', 'un fallimento non basta per scartare un hub');
+  assert.equal(H['yesdelft.com'].fallimenti, '1');
 
   // 3. secondo giro del crawler hub: snowball dal sito di Qubo
   const h2 = await hubs.run({ deadline, log: quiet });
@@ -101,9 +102,15 @@ test('pipeline completa', async () => {
   assert.equal(v.under30, 'sì');
   assert.equal((await classifyQueue(euristico, 100, quiet)).in_coda, 0, 'già valutata');
   await gas.backend('views', {});
-  const cl = gas.sheets.get('Classifica').cells;
+  const cl = gas.sheets.get('Startup trovate').cells;
   assert.equal(cl.length, 2);
   assert.equal(cl[1][0], 'Qubo');
   const log = await read('db_log');
   assert.equal(log.length, 6);
+
+  // terzo fallimento di fila: l'hub irraggiungibile si mette da parte
+  await startups.run({ deadline, log: quiet });
+  const y = (await read('db_hub')).find(r => r.hub_id === 'yesdelft.com');
+  assert.equal(y.stato, 'irraggiungibile');
+  assert.equal((await read('db_hub')).find(r => r.hub_id === 'hub-alpha.eu').fallimenti, '0');
 });

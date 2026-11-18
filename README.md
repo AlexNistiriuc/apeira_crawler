@@ -11,8 +11,8 @@ scrivono, ognuno solo nelle sue colonne:
                                                          classificatori (qualsiasi)
                                                                        │
                                                                        ▼
-                                          Classifica ◄────────  db_valutazioni
-                                       (vista per Alex)        (esito, fit, voto)
+                                    Startup trovate ◄──────  db_valutazioni
+                                 (vista per Alex e outreach) (esito, fit, voto)
 ```
 
 | pezzo | cosa fa | quando gira |
@@ -49,7 +49,7 @@ test/                        test senza rete: euristiche, Code.gs su finto Sheet
 
 1. **Foglio.** Nel foglio `pool_founder_startup`: Estensioni > Apps Script, incolla
    `apps-script/Code.gs`, salva, esegui `setup()`. Crea i tab `db_hub`, `db_candidati`,
-   `db_valutazioni`, `db_log`, `Classifica` senza toccare quelli esistenti e scrive il token nel
+   `db_valutazioni`, `db_log` (nascosti), prepara `Startup trovate`, nasconde i tab della v1 e scrive il token nel
    log di esecuzione. Poi Esegui il deployment > Nuovo deployment > App web, esegui come te,
    accesso "Chiunque". L'URL che finisce con `/exec` e il token servono a tutto il resto.
 2. **Dati della v1.** Nella vecchia scheda Chrome del crawler apri la console e incolla

@@ -3,30 +3,126 @@
   "tabs": {
     "db_hub": {
       "key": "hub_id",
-      "owner": "crawler hub (colonne hub_id..note), crawler startup (ultimo_crawl..cursore, e stato=irraggiungibile)",
-      "columns": ["hub_id", "nome", "url", "origine", "tipo", "stato", "priorita", "scoperto_il", "note", "ultimo_crawl", "pagine_lette", "candidati_trovati", "candidati_da_valutare", "cursore"]
+      "owner": "crawler hub (colonne hub_id..note), crawler startup (ultimo_crawl..fallimenti, e stato=irraggiungibile dopo 3 fallimenti di fila)",
+      "columns": [
+        "hub_id",
+        "nome",
+        "url",
+        "origine",
+        "tipo",
+        "stato",
+        "priorita",
+        "scoperto_il",
+        "note",
+        "ultimo_crawl",
+        "pagine_lette",
+        "candidati_trovati",
+        "candidati_da_valutare",
+        "cursore",
+        "fallimenti"
+      ]
     },
     "db_candidati": {
       "key": "dominio",
       "owner": "crawler startup (tutte tranne snowball_il), crawler hub (snowball_il)",
-      "columns": ["dominio", "nome", "sito", "hub_origine", "primo_visto", "ultimo_check", "stato_crawler", "motivo", "dominio_registrato", "primo_archivio", "anni_sul_sito", "settori", "punteggio_deep", "europa", "segnali_funding", "email", "linkedin_azienda", "linkedin_persone", "founder_nomi", "team_stima", "descrizione", "domanda_reale", "evidenze", "pagine_lette", "versione_crawler", "snowball_il"]
+      "columns": [
+        "dominio",
+        "nome",
+        "sito",
+        "hub_origine",
+        "primo_visto",
+        "ultimo_check",
+        "stato_crawler",
+        "motivo",
+        "dominio_registrato",
+        "primo_archivio",
+        "anni_sul_sito",
+        "settori",
+        "punteggio_deep",
+        "europa",
+        "segnali_funding",
+        "email",
+        "linkedin_azienda",
+        "linkedin_persone",
+        "founder_nomi",
+        "team_stima",
+        "descrizione",
+        "domanda_reale",
+        "evidenze",
+        "pagine_lette",
+        "versione_crawler",
+        "snowball_il"
+      ]
     },
     "db_valutazioni": {
       "key": "id",
       "owner": "classificatori (una riga per dominio e classificatore, id = dominio|classificatore)",
-      "columns": ["id", "dominio", "classificatore", "versione", "valutato_il", "esito", "fit", "voto", "motivo", "fondazione", "grant", "investimenti", "accesso_lab", "team", "eta_founder", "under30", "domanda_reale", "da_verificare", "fonti", "nota_alex"]
+      "columns": [
+        "id",
+        "dominio",
+        "classificatore",
+        "versione",
+        "valutato_il",
+        "esito",
+        "fit",
+        "voto",
+        "motivo",
+        "fondazione",
+        "grant",
+        "investimenti",
+        "accesso_lab",
+        "team",
+        "eta_founder",
+        "under30",
+        "domanda_reale",
+        "da_verificare",
+        "fonti",
+        "nota_alex"
+      ]
     },
     "db_log": {
       "key": null,
       "owner": "tutti (solo append)",
-      "columns": ["componente", "inizio", "fine", "statistiche"]
+      "columns": [
+        "componente",
+        "inizio",
+        "fine",
+        "statistiche"
+      ]
     }
   },
   "enums": {
-    "db_hub.stato": ["attivo", "escluso_vc", "escluso_junk", "irraggiungibile", "in_pausa"],
-    "db_hub.tipo": ["incubatore", "programma", "competizione", "spin-off", "rete", "directory", "altro"],
-    "db_candidati.stato_crawler": ["da_valutare", "scartata", "sito_morto", "da_ricontrollare"],
-    "db_valutazioni.esito": ["Qualificata", "Needs verification", "Esclusa"],
-    "db_valutazioni.fit": ["Alto", "Medio", "Basso"]
+    "db_hub.stato": [
+      "attivo",
+      "escluso_vc",
+      "escluso_junk",
+      "irraggiungibile",
+      "in_pausa"
+    ],
+    "db_hub.tipo": [
+      "incubatore",
+      "programma",
+      "competizione",
+      "spin-off",
+      "rete",
+      "directory",
+      "altro"
+    ],
+    "db_candidati.stato_crawler": [
+      "da_valutare",
+      "scartata",
+      "sito_morto",
+      "da_ricontrollare"
+    ],
+    "db_valutazioni.esito": [
+      "Qualificata",
+      "Needs verification",
+      "Esclusa"
+    ],
+    "db_valutazioni.fit": [
+      "Alto",
+      "Medio",
+      "Basso"
+    ]
   }
 }

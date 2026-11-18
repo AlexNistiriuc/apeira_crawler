@@ -23,11 +23,12 @@ class Sheet {
   getMaxRows() { return this.maxRows; } getMaxColumns() { return this.maxCols; }
   insertRowsAfter(_, n) { this.maxRows += n; } insertColumnsAfter(_, n) { this.maxCols += n; }
   setFrozenRows() {} clearContents() { this.cells = []; }
+  hideSheet() { this.hidden = true; return this; } showSheet() { this.hidden = false; return this; }
 }
 
 export function loadGas() {
   const sheets = new Map(), props = new Map();
-  const ss = { getSheetByName: n => sheets.get(n) || null, insertSheet: n => { const s = new Sheet(n); sheets.set(n, s); return s; } };
+  const ss = { getSheetByName: n => sheets.get(n) || null, insertSheet: n => { const s = new Sheet(n); sheets.set(n, s); return s; }, setActiveSheet: s => { if (s.hidden) throw new Error('attivo nascosto'); ss.active = s; } };
   const ctx = {
     SpreadsheetApp: { getActive: () => ss },
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => props.get(k) ?? null, setProperty: (k, v) => props.set(k, v) }) },

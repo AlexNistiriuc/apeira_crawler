@@ -3,7 +3,7 @@
  *
  * Installazione (una volta sola, dal foglio pool_founder_startup):
  *   Estensioni > Apps Script > incolla questo file > Salva
- *   Esegui la funzione setup()  -> crea i tab db_*, il tab Classifica e il token (lo trovi nel log)
+ *   Esegui la funzione setup()  -> crea i tab db_* (nascosti), prepara Startup trovate e crea il token (lo trovi nel log)
  *   Esegui il deploy > Nuovo deployment > App web > Esegui come: me > Chi può accedere: chiunque
  *   L'URL che finisce con /exec è SHEET_API_URL, il token è SHEET_API_TOKEN.
  *
@@ -11,12 +11,13 @@
  * Solo lettura anche via GET: ?token=...&action=queue&classifier=claude&limit=30&rank_by=euristico
  *
  * Azioni: read, upsert, append, queue, views, ping.
- * Il foglio è il database: i tab db_* sono scritti dai programmi, Classifica è la vista per le persone.
+ * Il foglio è il database: i tab db_* (nascosti) sono scritti dai programmi, Startup trovate è la vista per le persone
+ * e per l'agente di outreach. Le sue prime 17 colonne sono quelle della v1, nello stesso ordine.
  */
 
 // Deve coincidere con contracts/schema.json (lo controlla test/apps-script.test.js).
 var SCHEMA = {
-  db_hub: { key: 'hub_id', columns: ['hub_id', 'nome', 'url', 'origine', 'tipo', 'stato', 'priorita', 'scoperto_il', 'note', 'ultimo_crawl', 'pagine_lette', 'candidati_trovati', 'candidati_da_valutare', 'cursore'] },
+  db_hub: { key: 'hub_id', columns: ['hub_id', 'nome', 'url', 'origine', 'tipo', 'stato', 'priorita', 'scoperto_il', 'note', 'ultimo_crawl', 'pagine_lette', 'candidati_trovati', 'candidati_da_valutare', 'cursore', 'fallimenti'] },
   db_candidati: { key: 'dominio', columns: ['dominio', 'nome', 'sito', 'hub_origine', 'primo_visto', 'ultimo_check', 'stato_crawler', 'motivo', 'dominio_registrato', 'primo_archivio', 'anni_sul_sito', 'settori', 'punteggio_deep', 'europa', 'segnali_funding', 'email', 'linkedin_azienda', 'linkedin_persone', 'founder_nomi', 'team_stima', 'descrizione', 'domanda_reale', 'evidenze', 'pagine_lette', 'versione_crawler', 'snowball_il'] },
   db_valutazioni: { key: 'id', columns: ['id', 'dominio', 'classificatore', 'versione', 'valutato_il', 'esito', 'fit', 'voto', 'motivo', 'fondazione', 'grant', 'investimenti', 'accesso_lab', 'team', 'eta_founder', 'under30', 'domanda_reale', 'da_verificare', 'fonti', 'nota_alex'] },
   db_log: { key: null, columns: ['componente', 'inizio', 'fine', 'statistiche'] }
@@ -27,7 +28,8 @@ var ENUMS = {
   'db_candidati.stato_crawler': ['da_valutare', 'scartata', 'sito_morto', 'da_ricontrollare'],
   'db_hub.stato': ['attivo', 'escluso_vc', 'escluso_junk', 'irraggiungibile', 'in_pausa']
 };
-var VIEW_TAB = 'Classifica';
+var VIEW_TAB = 'Startup trovate';
+var OLD_TABS = ['Classifica', 'pool_founder_startup', 'Hub del crawler']; // sostituiti dai tab db_*: setup() li nasconde
 var MAX_CELL = 49000;
 
 // ---------------------------------------------------------------- ingresso
@@ -79,8 +81,11 @@ function withLock_(fn) {
 
 function setup() {
   var ss = SpreadsheetApp.getActive();
-  Object.keys(SCHEMA).forEach(function (name) { ensureTab_(ss, name, SCHEMA[name].columns); });
-  ensureTab_(ss, VIEW_TAB, VIEW_COLUMNS);
+  var view = ss.getSheetByName(VIEW_TAB) || ensureTab_(ss, VIEW_TAB, VIEW_COLUMNS);
+  view.showSheet();
+  ss.setActiveSheet(view);   // prima la vista attiva, poi si possono nascondere gli altri
+  Object.keys(SCHEMA).forEach(function (name) { ensureTab_(ss, name, SCHEMA[name].columns).hideSheet(); });
+  OLD_TABS.forEach(function (n) { var sh = ss.getSheetByName(n); if (sh) sh.hideSheet(); });
   var props = PropertiesService.getScriptProperties();
   if (!props.getProperty('API_TOKEN')) props.setProperty('API_TOKEN', Utilities.getUuid().replace(/-/g, ''));
   if (!props.getProperty('PRECEDENZA')) props.setProperty('PRECEDENZA', 'claude,euristico');
@@ -92,6 +97,7 @@ function setup() {
 function ensureTab_(ss, name, cols) {
   var sh = ss.getSheetByName(name);
   if (!sh) sh = ss.insertSheet(name);
+  if (sh.getMaxColumns() < cols.length) sh.insertColumnsAfter(sh.getMaxColumns(), cols.length - sh.getMaxColumns());
   if (sh.getLastRow() === 0) {
     sh.getRange(1, 1, 1, cols.length).setValues([cols]).setFontWeight('bold');
     sh.setFrozenRows(1);
@@ -246,10 +252,16 @@ function queue_(classifier, limit, rankBy) {
 
 // ---------------------------------------------------------------- vista per le persone
 
-var VIEW_COLUMNS = ['Startup', 'Sito', 'Esito', 'Under 30', 'Fit', 'Voto', 'Motivo', 'Valutata da', 'Settori', 'Europa', 'Fondazione', 'Grant', 'Investimenti esterni', 'Accesso lab', 'Team', 'Età founder', 'Domanda reale', 'Da verificare', 'Email', 'LinkedIn azienda', 'Founder (nomi)', 'Pool di provenienza', 'Descrizione', 'Nota Alex'];
+var VIEW_COLUMNS = [
+  // le 17 colonne della v1, stesso ordine: le usa l'agente di outreach
+  'Startup', 'Sito', 'Stato', 'Fit', 'Funding rilevato sul sito', 'Settori', 'Europa', 'Dominio registrato', 'Anni citati sul sito',
+  'Email', 'LinkedIn azienda', 'LinkedIn founder', 'Founder (nomi)', 'Età founder (stima)', 'Pool di provenienza', 'Link pool', 'Descrizione',
+  // nuove, dalla valutazione
+  'Esito criteri rigidi', 'Voto', 'Motivo', 'Valutata da', 'Fondazione', 'Grant', 'Investimenti esterni', 'Accesso lab', 'Team',
+  'Domanda reale', 'Da verificare', 'Nota Alex'];
 
 /**
- * Ricostruisce il tab Classifica: una riga per startup, con la valutazione del classificatore che ha la precedenza
+ * Ricostruisce il tab Startup trovate: una riga per startup non esclusa, con la valutazione del classificatore che ha la precedenza
  * (proprietà PRECEDENZA, default "claude,euristico"). Gira ogni ora. Le note in colonna "Nota Alex" si conservano.
  */
 function buildViews() {
@@ -265,7 +277,9 @@ function buildViews_() {
     if (!cur || p < cur._p) { v._p = p; best[v.dominio] = v; }
   });
   var rank = { 'Qualificata': 0, 'Needs verification': 1 }, frank = { Alto: 0, Medio: 1, Basso: 2 };
-  var CCOLS = ['dominio', 'nome', 'sito', 'settori', 'europa', 'email', 'linkedin_azienda', 'founder_nomi', 'hub_origine', 'descrizione', 'stato_crawler'];
+  var CCOLS = ['dominio', 'nome', 'sito', 'settori', 'europa', 'email', 'linkedin_azienda', 'linkedin_persone', 'founder_nomi', 'hub_origine', 'descrizione', 'stato_crawler', 'segnali_funding', 'dominio_registrato', 'primo_archivio', 'anni_sul_sito'];
+  var hubUrl = {};
+  readRows_('db_hub', ['nome', 'url']).forEach(function (h) { hubUrl[h.nome] = h.url; });
   var rows = readRows_('db_candidati', CCOLS, { stato_crawler: 'da_valutare' }).map(function (c) {
     return { c: c, v: best[c.dominio] };
   }).filter(function (x) { return x.v && x.v.esito !== 'Esclusa'; });
@@ -274,7 +288,7 @@ function buildViews_() {
     return ra - rb || frank[a.v.fit] - frank[b.v.fit] || Number(b.v.voto) - Number(a.v.voto);
   });
   var sh = SpreadsheetApp.getActive().getSheetByName(VIEW_TAB) || ensureTab_(SpreadsheetApp.getActive(), VIEW_TAB, VIEW_COLUMNS);
-  // le note scritte a mano in Classifica vengono salvate in db_valutazioni.nota_alex prima di ricostruire
+  // le note scritte a mano nella vista vengono salvate in db_valutazioni.nota_alex prima di ricostruire
   var notes = {}, old = table_(sh), si = old.head.indexOf('Sito'), ni = old.head.indexOf('Nota Alex');
   if (si >= 0 && ni >= 0) old.data.forEach(function (r) { if (String(r[ni]).trim()) notes[String(r[si])] = String(r[ni]); });
   var save = [];
@@ -285,9 +299,17 @@ function buildViews_() {
   if (save.length) upsert_('db_valutazioni', 'id', save);
   var vals = rows.map(function (x) {
     var c = x.c, v = x.v;
-    return [c.nome, c.sito, v.esito, v.under30, v.fit, v.voto, v.motivo, v.classificatore + ' ' + v.versione, c.settori, c.europa, v.fondazione, v.grant, v.investimenti, v.accesso_lab, v.team, v.eta_founder, v.domanda_reale, v.da_verificare, c.email, c.linkedin_azienda, c.founder_nomi, c.hub_origine, c.descrizione, v.nota_alex].map(cell_);
+    var hubs = String(c.hub_origine || '').split(', ').filter(String);
+    var stato = v.esito === 'Qualificata' ? 'Target' : 'Da verificare: ' + (v.da_verificare || v.motivo);
+    var dom = c.dominio_registrato ? 'registrato ' + c.dominio_registrato : (c.primo_archivio ? 'primo archivio web ' + c.primo_archivio : '');
+    return [c.nome, c.sito, stato, v.fit, c.segnali_funding || 'nessuno', c.settori, c.europa, dom, c.anni_sul_sito,
+      c.email, c.linkedin_azienda, c.linkedin_persone, c.founder_nomi, v.eta_founder, hubs.join(' ; '),
+      hubs.map(function (h) { return hubUrl[h] || ''; }).filter(String).join(' ; '), c.descrizione,
+      v.esito, v.voto, v.motivo, v.classificatore + ' ' + v.versione, v.fondazione, v.grant, v.investimenti, v.accesso_lab, v.team,
+      v.domanda_reale, v.da_verificare, v.nota_alex].map(cell_);
   });
   sh.clearContents();
+  if (sh.getMaxColumns() < VIEW_COLUMNS.length) sh.insertColumnsAfter(sh.getMaxColumns(), VIEW_COLUMNS.length - sh.getMaxColumns());
   sh.getRange(1, 1, 1, VIEW_COLUMNS.length).setValues([VIEW_COLUMNS]).setFontWeight('bold');
   if (vals.length) {
     if (sh.getMaxRows() < vals.length + 1) sh.insertRowsAfter(sh.getMaxRows(), vals.length + 1 - sh.getMaxRows());

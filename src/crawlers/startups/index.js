@@ -14,6 +14,7 @@ const HUB_PAR = Number(process.env.HUB_PAR || 4);
 const CHECK_PAR = Number(process.env.CHECK_PAR || 16);
 const RECRAWL_DAYS = Number(process.env.RECRAWL_DAYS || 7);
 const MAX_HUBS = Number(process.env.MAX_HUBS || 400);
+const HUB_MAX_FAILS = 3;
 
 export async function run({ deadline = deadlineFromNow(), log = console.log } = {}) {
   const startedAt = now();
@@ -71,7 +72,13 @@ export async function run({ deadline = deadlineFromNow(), log = console.log } = 
           const r = ad ? await runAdapter(ad, h, h.cursore || '', conf?.max_pages_per_run || 400) : await discover(h, { deep: /^(rete|directory)/.test(h.origine || '') || h.tipo === 'directory' });
           for (const it of r.found) offer(it, h.nome, !!ad);
           st.hub_letti++;
-          await hubOut.push({ hub_id: h.hub_id, ultimo_crawl: now(), pagine_lette: r.pages, ...(ad ? { cursore: r.cursor } : {}), ...(r.pages === 0 ? { stato: 'irraggiungibile' } : {}) });
+          if (r.pages === 0) {
+            // niente letto: non aggiorna ultimo_crawl, così si riprova al prossimo run; dopo 3 fallimenti di fila si mette da parte
+            const f = (+h.fallimenti || 0) + 1;
+            await hubOut.push({ hub_id: h.hub_id, fallimenti: f, ...(f >= HUB_MAX_FAILS ? { stato: 'irraggiungibile', ultimo_crawl: now() } : {}) });
+          } else {
+            await hubOut.push({ hub_id: h.hub_id, ultimo_crawl: now(), pagine_lette: r.pages, fallimenti: 0, ...(ad ? { cursore: r.cursor } : {}) });
+          }
           log(`hub ${h.nome.slice(0, 40)}: ${r.pages} pagine, ${r.found.length} link a startup`);
         } catch (e) { log(`hub ${h.nome} errore: ${e.message}`); }
       }

@@ -1,6 +1,6 @@
 ---
 name: "apeira-startup-scouting"
-description: "Grade and qualify the startups found by the Apeira crawlers, twice a day, writing the results to the pool_founder_startup sheet, and check that the crawlers are healthy. Use this whenever Alex asks to evaluate, grade, qualify or review startups, run the morning or evening scouting check, look at the Classifica, add a pool or hub, or asks how the Apeira crawler or scouting is doing, even if he doesn't name the skill."
+description: "Grade and qualify the startups found by the Apeira crawlers, twice a day, writing the results to the pool_founder_startup sheet, and check that the crawlers are healthy. Use this whenever Alex asks to evaluate, grade, qualify or review startups, run the morning or evening scouting check, look at Startup trovate, add a pool or hub, or asks how the Apeira crawler or scouting is doing, even if he doesn't name the skill."
 ---
 
 # Apeira startup scouting (v9)
@@ -136,7 +136,7 @@ Budget: about 30 candidates per run. Alex can change the number in the scheduled
    - Never write `nota_alex`.
    The sheet rejects invalid rows. If it answers `ok:false`, fix the row and retry.
 
-5. **Refresh the view**: `await api('views')`. This rebuilds the `Classifica` tab. When both
+5. **Refresh the view**: `await api('views')`. This rebuilds the `Startup trovate` tab, the only visible one, which the apeira-outreach skill reads (its first 17 columns are the v1 ones; Stato is "Target" only for Qualificata). When both
    graded a startup, `claude` grades take precedence over `euristico`.
 
 6. **Update Alex in Italian**, short, no em dashes and no colons in prose. Cover:

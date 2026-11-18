@@ -74,5 +74,5 @@ sbaglia formato non sporca i dati.
 3. **Qualsiasi altro programma** (un altro modello, uno script, una persona con un form):
    chiama la web app con `queue` e `upsert` come descritto in `apps-script/Code.gs`.
 
-La vista `Classifica` sceglie per ogni startup la valutazione del classificatore con più
+La vista `Startup trovate` sceglie per ogni startup la valutazione del classificatore con più
 precedenza (proprietà di script `PRECEDENZA`, oggi `claude,euristico`).
