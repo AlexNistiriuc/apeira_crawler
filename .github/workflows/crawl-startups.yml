@@ -1,7 +1,8 @@
 name: crawler startup
 on:
   schedule:
-    - cron: '15 */3 * * *'     # ogni 3 ore
+    - cron: '15 * * * *'       # ogni ora: con giri da ~50 minuti il crawler lavora praticamente senza sosta
+    # attenzione: repo privato col piano gratuito = circa 2.000 minuti di Actions al mese, a questo ritmo durano circa 1,5 giorni
   workflow_dispatch:
 concurrency: { group: crawler-startup, cancel-in-progress: false }
 jobs:

@@ -12,11 +12,11 @@ Since v9 the work is split in three independent parts that only talk through the
 `pool_founder_startup` (id `1MY3J2S6xg0ftZziP7lGiVTrtft2UxapE3SYDc_JDolU`, account alex@apeira.it):
 
 - **Crawler hub** (GitHub Actions, daily): keeps the list of pools in `db_hub`.
-- **Crawler startup** (GitHub Actions, every 3 hours): finds candidate sites in the pools, checks age,
+- **Crawler startup** (GitHub Actions, every hour in runs of ~50 minutes, so almost nonstop): finds candidate sites in the pools, checks age,
   funding, sector, team and contacts, and writes every candidate with its evidence to `db_candidati`.
   It only discards what is certain; everything else is `stato_crawler = da_valutare`.
 - **Classifiers** write grades to `db_valutazioni`, one row per startup and classifier.
-  `euristico` runs on GitHub at 08:00 and 18:00 Rome. **Claude is the `claude` classifier**: this skill.
+  `euristico` runs on GitHub right after each crawler startup run. **Claude is the `claude` classifier**: this skill.
 
 The code is in https://github.com/AlexNistiriuc/apeira_crawler (branch `v2-sheet-db` until merged).
 Column contract: `contracts/schema.json`. Classifier contract: `contracts/CLASSIFICATORI.md`.
@@ -82,15 +82,17 @@ asleep), say so in one line and stop: don't try other routes to the token.
 Keep javascript_tool results small (the tool times out at ~45 s and long outputs waste budget):
 map rows to the fields you need and trim text before returning it.
 
-## Twice-daily evaluation (08:30 and 18:30 Rome)
+## Twice-daily evaluation (12:00 and 18:30 Rome)
 
 Budget: about 30 candidates per run. Alex can change the number in the scheduled prompt.
 
 1. **Crawler health.** Read the last rows of `db_log`:
    `(await api('read',{tab:'db_log'})).rows.slice(-8)`. Check that `crawler startup` ran in the last
-   ~4 hours and `crawler hub` in the last ~26 hours, and look at the counts in `statistiche`
+   ~2 hours and `crawler hub` in the last ~26 hours, and look at the counts in `statistiche`
    (`da_valutare`, `scartati`, `rimandati`, `http.robotsBlocked`, `http.jina429`). Flag runs that
-   failed, stopped running, or produced zero new candidates twice in a row. Don't fix code from
+   failed, stopped running, or produced zero new candidates twice in a row. The repo is private on the free
+   GitHub plan (about 2,000 Actions minutes a month): if runs stop with a billing or quota error, the minutes are
+   used up. Tell Alex; don't try to work around it. Don't fix code from
    here; describe the problem to Alex.
 
 2. **Get the queue**, ranked by the heuristic grade so the most promising come first:

@@ -1,7 +1,6 @@
 name: classificatore euristico
 on:
-  schedule:
-    - cron: '0 7,17 * * *'     # 08:00 e 18:00 a Roma, prima delle valutazioni di Claude
+  # parte già alla fine di ogni giro del crawler startup; qui resta solo il lancio a mano
   workflow_dispatch:
     inputs:
       classificatore: { description: 'nome del file in src/classifiers', default: 'euristico' }

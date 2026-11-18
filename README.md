@@ -18,9 +18,9 @@ scrivono, ognuno solo nelle sue colonne:
 | pezzo | cosa fa | quando gira |
 | --- | --- | --- |
 | crawler hub | aggiunge pool: semi, reti di incubatori (EBN, UKSPA), snowball dai siti delle startup | GitHub Actions, ogni giorno alle 05:00 |
-| crawler startup | legge i pool, trova i siti delle startup, controlla età, funding, settore, team, contatti, salva le evidenze | GitHub Actions, ogni 3 ore |
-| classificatore euristico | i criteri rigidi della v1, come base di confronto | GitHub Actions, 08:00 e 18:00 |
-| Claude con la skill | la valutazione vera, con verifica delle fonti | 08:30 e 18:30, attività programmata |
+| crawler startup | legge i pool, trova i siti delle startup, controlla età, funding, settore, team, contatti, salva le evidenze | GitHub Actions, ogni ora, giri da ~50 minuti (praticamente continuo) |
+| classificatore euristico | i criteri rigidi della v1, come base di confronto | subito dopo ogni giro del crawler startup |
+| Claude con la skill | la valutazione vera, con verifica delle fonti | 12:00 e 18:30, attività programmata |
 
 Il crawler non dà voti: scarta solo ciò che è certo (round già chiuso, fondata prima del 2025,
 azienda grande, investitore, non deep tech, dominio vecchio) e passa tutto il resto ai classificatori
