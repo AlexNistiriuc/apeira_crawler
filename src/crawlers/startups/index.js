@@ -10,6 +10,13 @@ import { adapterFor, runAdapter } from './directories.js';
 import { checkCandidate } from './check.js';
 import { STATO } from '../../signals/prefilter.js';
 
+// undici (la fetch di Node) a volte lancia un AssertionError (assert(!this.paused)) dentro un evento
+// del socket, fuori da ogni try/catch: il processo moriva e il giro andava perso. Lo ignoriamo e
+// andiamo avanti (la richiesta coinvolta scade comunque per timeout). Ogni altro errore resta fatale.
+const isUndiciBug = e => e && e.code === 'ERR_ASSERTION' && /undici/.test(String(e.stack));
+process.on('uncaughtException', e => { if (isUndiciBug(e)) { console.warn('undici assertion ignorata:', e.message); return; } console.error(e); process.exit(1); });
+process.on('unhandledRejection', e => { if (isUndiciBug(e)) { console.warn('undici assertion ignorata (rejection)'); return; } console.error(e); process.exit(1); });
+
 const HUB_PAR = Number(process.env.HUB_PAR || 4);
 const CHECK_PAR = Number(process.env.CHECK_PAR || 16);
 const RECRAWL_DAYS = Number(process.env.RECRAWL_DAYS || 7);
