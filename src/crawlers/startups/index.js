@@ -4,7 +4,7 @@
 import { read, upsert, writer, logRun, TABS } from '../../lib/sheet.js';
 import { host, reg, bad } from '../../lib/url.js';
 import { deadlineFromNow, now, SOURCES } from '../../lib/config.js';
-import { stats as httpStats, sleep } from '../../lib/http.js';
+import { stats as httpStats, sleep, withTimeout } from '../../lib/http.js';
 import { discover } from './discover.js';
 import { adapterFor, runAdapter } from './directories.js';
 import { checkCandidate } from './check.js';
@@ -15,6 +15,9 @@ const CHECK_PAR = Number(process.env.CHECK_PAR || 16);
 const RECRAWL_DAYS = Number(process.env.RECRAWL_DAYS || 7);
 const MAX_HUBS = Number(process.env.MAX_HUBS || 400);
 const HUB_MAX_FAILS = 3;
+const CAND_TIMEOUT_MS = 120_000;      // un candidato non può tenere occupato un lavoratore per più di 2 minuti
+const HUB_TIMEOUT_MS = 8 * 60_000;    // un hub non può bloccare la scoperta per più di 8 minuti
+const MAX_QUEUE = 1500;               // oltre questa coda la scoperta aspetta: inutile trovare più di quanto si riesce a controllare
 
 export async function run({ deadline = deadlineFromNow(), log = console.log } = {}) {
   const startedAt = now();
@@ -31,8 +34,8 @@ export async function run({ deadline = deadlineFromNow(), log = console.log } = 
     .slice(0, MAX_HUBS);
   log(`hub da leggere in questo run ${due.length}`);
 
-  const out = writer(TABS.cand, 'dominio', 50);
-  const hubOut = writer(TABS.hub, 'hub_id', 20);
+  const out = writer(TABS.cand, 'dominio', 200);   // blocchi grandi: ogni scrittura nel foglio ha un costo fisso
+  const hubOut = writer(TABS.hub, 'hub_id', 50);
   const queue = [];                       // candidati nuovi da controllare
   const inRun = new Map();                // dominio -> candidato (dedup nel run)
   const extraHub = new Map();             // dominio noto -> nuovi hub da aggiungere a hub_origine
@@ -65,11 +68,15 @@ export async function run({ deadline = deadlineFromNow(), log = console.log } = 
     let i = 0;
     await Promise.all(Array.from({ length: HUB_PAR }, async () => {
       while (i < due.length && Date.now() < deadline) {
+        while (queue.length > MAX_QUEUE && Date.now() < deadline) await sleep(2000);
+        if (Date.now() >= deadline) break;
         const h = due[i++];
         try {
           const ad = adapterFor(h.url);
           const conf = SOURCES.directories.find(x => x.adapter === ad);
-          const r = ad ? await runAdapter(ad, h, h.cursore || '', conf?.max_pages_per_run || 400) : await discover(h, { deep: /^(rete|directory)/.test(h.origine || '') || h.tipo === 'directory' });
+          const job = ad ? runAdapter(ad, h, h.cursore || '', conf?.max_pages_per_run || 400) : discover(h, { deep: /^(rete|directory)/.test(h.origine || '') || h.tipo === 'directory' });
+          const r = await withTimeout(job, HUB_TIMEOUT_MS, null);
+          if (!r) { log(`hub ${h.nome.slice(0, 40)}: tempo scaduto, riprovo al prossimo run`); continue; }
           for (const it of r.found) offer(it, h.nome, !!ad);
           st.hub_letti++;
           if (r.pages === 0) {
@@ -91,7 +98,7 @@ export async function run({ deadline = deadlineFromNow(), log = console.log } = 
       const c = queue.shift();
       if (!c) { if (!discovering) break; await sleep(500); continue; }
       try {
-        const row = await checkCandidate(c);
+        const row = await withTimeout(checkCandidate(c), CAND_TIMEOUT_MS, () => ({ dominio: c.dominio, nome: c.nome, sito: c.sito, hub_origine: c.hubs.join(', '), primo_visto: c.primo_visto, ultimo_check: now(), stato_crawler: STATO.RICONTROLLA, motivo: 'controllo troppo lento, riprovo' }));
         st.controllati++;
         if (row.stato_crawler === STATO.DA_VALUTARE) st.da_valutare++;
         else if (row.stato_crawler === STATO.SCARTATA) st.scartati++;
@@ -105,6 +112,7 @@ export async function run({ deadline = deadlineFromNow(), log = console.log } = 
 
   await Promise.all([discovery, checking]);
   // candidati scoperti ma non controllati per fine tempo: restano da ricontrollare al prossimo run
+  log(`fine tempo: ${queue.length} candidati scoperti ma non controllati, salvati come da_ricontrollare`);
   for (const c of queue) await out.push({ dominio: c.dominio, nome: c.nome, sito: c.sito, hub_origine: c.hubs.join(', '), primo_visto: c.primo_visto, ultimo_check: now(), stato_crawler: STATO.RICONTROLLA, motivo: 'non controllato per fine tempo del run' });
   st.rimandati += queue.length;
   await out.flush();

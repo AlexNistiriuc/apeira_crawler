@@ -173,37 +173,38 @@ function upsert_(tab, key, rows) {
   if (!SCHEMA[tab]) throw new Error('tab non ammesso: ' + tab);
   if (key !== SCHEMA[tab].key) throw new Error('la chiave di ' + tab + ' è ' + SCHEMA[tab].key);
   var sh = sheet_(tab);
-  var t = table_(sh);
+  var lr = sh.getLastRow(), lc = Math.max(sh.getLastColumn(), 1);
+  var oldHead = lr ? sh.getRange(1, 1, 1, lc).getValues()[0].map(String) : [];
   var fields = {};
   rows.forEach(function (r) { validate_(tab, r); Object.keys(r).forEach(function (k) { fields[k] = 1; }); });
-  var head = ensureColumns_(sh, t.head, Object.keys(fields));
+  var head = ensureColumns_(sh, oldHead, Object.keys(fields));
   var idx = {};
   head.forEach(function (h, i) { idx[h] = i; });
   var ki = idx[key];
+  // si legge solo la colonna chiave: con decine di migliaia di righe leggere tutto il tab a ogni scrittura è troppo lento
   var pos = {};
-  for (var r = 0; r < t.data.length; r++) pos[String(t.data[r][ki])] = r;
+  if (lr > 1) sh.getRange(2, ki + 1, lr - 1, 1).getValues().forEach(function (v, r) { pos[String(v[0])] = r; });
 
-  var inserts = [], updated = 0, seen = {};
+  var inserts = [], updates = {}, updated = 0, fresh = {};
   rows.forEach(function (row) {
     var k = String(row[key] || '');
     if (!k) return;
     if (pos[k] !== undefined) {
-      var cur = t.data[pos[k]];
-      while (cur.length < head.length) cur.push('');
-      Object.keys(row).forEach(function (f) { cur[idx[f]] = cell_(row[f]); });
-      seen[pos[k]] = cur;
+      (updates[pos[k]] = updates[pos[k]] || []).push(row);
       updated++;
-    } else if (seen['new:' + k]) {
-      Object.keys(row).forEach(function (f) { seen['new:' + k][idx[f]] = cell_(row[f]); });
+    } else if (fresh[k]) {
+      Object.keys(row).forEach(function (f) { fresh[k][idx[f]] = cell_(row[f]); });
     } else {
-      var arr = head.map(function (h) { return cell_(row[h]); });
-      seen['new:' + k] = arr;
-      inserts.push(arr);
+      fresh[k] = head.map(function (h) { return cell_(row[h]); });
+      inserts.push(fresh[k]);
     }
   });
-  Object.keys(seen).forEach(function (r) {
-    if (r.indexOf('new:') === 0) return;
-    sh.getRange(Number(r) + 2, 1, 1, head.length).setValues([seen[r]]);
+  // aggiornamenti: si legge e riscrive solo la riga toccata, cambiando solo i campi passati
+  Object.keys(updates).forEach(function (r) {
+    var rng = sh.getRange(Number(r) + 2, 1, 1, head.length);
+    var cur = rng.getValues()[0];
+    updates[r].forEach(function (row) { Object.keys(row).forEach(function (f) { cur[idx[f]] = cell_(row[f]); }); });
+    rng.setValues([cur]);
   });
   if (inserts.length) {
     var start = sh.getLastRow() + 1;
