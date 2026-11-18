@@ -1,6 +1,8 @@
 // HTML -> testo in stile Jina Reader ("Title / URL Source / Markdown Content" con link [testo](url)).
 // Stesso formato della v1, così le euristiche funzionano uguale su lettura diretta e su Jina.
-import * as cheerio from 'cheerio';
+// cheerio/slim: solo il parser. L'import completo carica anche undici, che si registra come motore
+// del fetch di Node e in un caso raro (connessione chiusa a metà) va in crash con un AssertionError.
+import * as cheerio from 'cheerio/slim';
 
 const MAX = 80000;
 

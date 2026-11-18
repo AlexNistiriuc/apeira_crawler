@@ -31,12 +31,14 @@ async function tfetch(url, opts = {}, ms = DEFAULT_MS) {
     let text = '';
     if (r.body && r.body.getReader) {
       const reader = r.body.getReader(), dec = new TextDecoder();
-      let n = 0;
+      let n = 0, capped = false;
       for (;;) {
-        const { done, value } = await reader.read();
+        let chunk;
+        try { chunk = await reader.read(); } catch (e) { if (capped) break; throw e; }   // scaduto il tempo: errore
+        const { done, value } = chunk;
         if (done) break;
         n += value.length; text += dec.decode(value, { stream: true });
-        if (n >= MAX_BYTES) { try { await reader.cancel(); } catch {} break; }
+        if (n >= MAX_BYTES) { capped = true; c.abort(); break; }   // basta così: si interrompe la connessione
       }
     } else text = await r.text();
     return { status: r.status, ok: r.ok, url: r.url || url, headers: r.headers, text };

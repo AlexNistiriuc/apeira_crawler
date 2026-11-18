@@ -5,6 +5,9 @@ on:
     # attenzione: repo privato col piano gratuito = circa 2.000 minuti di Actions al mese, a questo ritmo durano circa 1,5 giorni
   workflow_dispatch:
 concurrency: { group: crawler-startup, cancel-in-progress: false }
+permissions:
+  contents: read
+  actions: write   # serve solo per far ripartire il giro successivo
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -14,15 +17,24 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: npm }
       - run: npm ci
-      - run: npm run startups
+      - id: crawl
+        run: npm run startups
         env:
           SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
           SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
           JINA_KEY: ${{ secrets.JINA_KEY }}
-          RUN_MINUTES: 50
+          RUN_MINUTES: 45
       # subito dopo il crawler: l'euristico valuta i candidati nuovi, così Startup trovate è sempre aggiornato
       - run: npm run classify -- euristico 3000
         if: always()
         env:
           SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
           SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
+      # catena: appena finisce un giro riuscito ne parte un altro, così il crawler lavora senza sosta
+      # (il cron orario resta come rete di sicurezza: GitHub a volte salta o ritarda gli orari programmati).
+      # Si ferma da sola se il crawler fallisce, così un errore non brucia minuti in un ciclo veloce.
+      - if: always() && steps.crawl.outcome == 'success'
+        run: gh workflow run crawl-startups.yml --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}

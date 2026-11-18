@@ -146,4 +146,9 @@ export async function refreshHubStats(log = console.log) {
   log(`statistiche aggiornate su ${rows.length} hub`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) run().catch(e => { console.error(e); process.exit(1); });
+if (import.meta.url === `file://${process.argv[1]}`) {
+  // un errore imprevisto su un singolo sito non deve uccidere un giro da 45 minuti
+  process.on('uncaughtException', e => console.error('errore imprevisto ignorato:', e?.message || e));
+  process.on('unhandledRejection', e => console.error('promessa rifiutata ignorata:', e?.message || e));
+  run().catch(e => { console.error(e); process.exit(1); });
+}

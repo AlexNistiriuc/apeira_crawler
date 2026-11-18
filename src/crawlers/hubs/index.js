@@ -64,4 +64,8 @@ export async function run({ deadline = deadlineFromNow(), log = console.log } = 
   return st;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) run().catch(e => { console.error(e); process.exit(1); });
+if (import.meta.url === `file://${process.argv[1]}`) {
+  process.on('uncaughtException', e => console.error('errore imprevisto ignorato:', e?.message || e));
+  process.on('unhandledRejection', e => console.error('promessa rifiutata ignorata:', e?.message || e));
+  run().catch(e => { console.error(e); process.exit(1); });
+}
