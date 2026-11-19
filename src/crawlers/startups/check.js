@@ -32,16 +32,18 @@ export async function checkCandidate(c) {
     scanPage(s, home.text, { home: true });
     const own = links(home.text).map(x => x).filter(([, l]) => { const h = host(l); return h && reg(h) === c.dominio; });
     const pick = re => { const x = own.find(([tx, l]) => re.test(l.replace(/^https?:\/\/[^/]+/, '') + ' ' + tx)); return x && x[1]; };
+    // fino a due pagine con le persone (es. /team e /about): più nomi e ruoli dei founder
     const team = pick(TEAM);
+    const team2 = (own.find(([tx, l]) => l !== team && TEAM.test(l.replace(/^https?:\/\/[^/]+/, '') + ' ' + tx)) || [])[1];
     let contact = pick(CONTACT);
     if (!contact && !s.em.length) {
       const tld = c.dominio.split('.').pop();
       contact = c.sito.replace(/\/$/, '') + (/^(de|at|ch|li)$/.test(tld) ? '/impressum' : tld === 'fr' ? '/mentions-legales' : '/contact');
     }
-    for (const [u, legal] of [[team, false], [contact, true]]) {
+    for (const [u, legal] of [[team, false], [team2, false], [contact, true]]) {
       if (!u || pages.includes(u)) continue;
       const r = await getPage(u, { jinaFallback: false });
-      if (r.status === 200 && r.text) { pages.push(u); if (!legal) texts.team = r.text; scanPage(s, r.text, { legal }); }
+      if (r.status === 200 && r.text) { pages.push(u); if (!legal && !texts.team) texts.team = r.text; scanPage(s, r.text, { legal }); }
     }
   }
   let d = decide({ s, alive, trusted: c.trusted, registrato });

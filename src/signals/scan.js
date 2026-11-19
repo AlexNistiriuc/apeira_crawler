@@ -19,6 +19,12 @@ export function emptySignals() {
 }
 
 const uniq = (a, n) => [...new Set(a)].slice(0, n);
+/** Nomi dei founder senza doppioni; "Anna Rossi (CEO)" vince su "Anna Rossi". */
+function mergeNames(list, n) {
+  const m = new Map();
+  for (const x of list) { const name = x.replace(/\s*\((CEO|CTO)\)$/, ''); if (!m.has(name) || /\((CEO|CTO)\)$/.test(x)) m.set(name, x); }
+  return [...m.values()].slice(0, n);
+}
 const snip = (t, i, a, b) => t.slice(Math.max(0, i - a), i + b).replace(/\s+/g, ' ').trim();
 
 /** Punteggio deep tech, anni, contatti, nomi. Era analyze() della v1. */
@@ -49,8 +55,16 @@ export function analyze(t) {
   const lco = (t.match(/linkedin\.com\/company\/[A-Za-z0-9\-_%]+/g) || []).map(x => 'https://www.' + x);
 
   const fn = new Set();
-  const fre = /([A-ZÀ-Ý][a-zà-ÿ'\-]{1,20}(?:\s[A-ZÀ-Ý][a-zà-ÿ'\-]{1,25}){1,2})\s*(?:[,|\-–—:·]\s*|\n+|\s+)(?:Co-?\s?[Ff]ounder|CO-?FOUNDER|[Ff]ounder|FOUNDER|CEO|CTO|Chief Executive|Chief Technology|Geschäftsführer)/g;
-  while ((m = fre.exec(t)) && fn.size < 5) { const nm = m[1].trim(); if (!/^(The|Our|Meet|About|Team|Contact|Join|Read|Learn|Co|Founder)\b/.test(nm)) fn.add(nm); }
+  const fre = /([A-ZÀ-Ý][a-zà-ÿ'\-]{1,20}(?:\s[A-ZÀ-Ý][a-zà-ÿ'\-]{1,25}){1,2})\s*(?:[,|\-–—:·]\s*|\n+|\s+)(Co-?\s?[Ff]ounder|CO-?FOUNDER|[Ff]ounder|FOUNDER|CEO|CTO|Chief Executive|Chief Technology|Geschäftsführer)/g;
+  // il ruolo resta accanto al nome ("Anna Rossi (CEO)"): serve a stimare l'età di CEO e CTO
+  const ROLE = r => /CEO|Chief Executive|Geschäftsführer/i.test(r) ? 'CEO' : /CTO|Chief Technology/i.test(r) ? 'CTO' : 'co-founder';
+  const byName = new Map();
+  while ((m = fre.exec(t)) && byName.size < 5) {
+    const nm = m[1].trim(); if (/^(The|Our|Meet|About|Team|Contact|Join|Read|Learn|Co|Founder)\b/.test(nm)) continue;
+    const r = ROLE(m[2]); const prev = byName.get(nm);
+    if (!prev || prev === 'co-founder') byName.set(nm, r);
+  }
+  for (const [nm, r] of byName) fn.add(r === 'co-founder' ? nm : `${nm} (${r})`);
 
   const title = (t.match(/^Title:\s*(.*)$/m) || [])[1] || '';
   let desc = (t.match(/Markdown Content:\s*([\s\S]{0,1500})/) || [])[1] || '';
@@ -149,7 +163,7 @@ export function scanPage(s, t, opt = {}) {
   s.yrs = uniq([...s.yrs, ...a.yrs], 10);
   if (a.cmin) s.cmin = Math.min(s.cmin || 9999, a.cmin);
   s.em = uniq([...s.em, ...a.em], 6); s.lin = uniq([...s.lin, ...a.lin], 8); s.lco = uniq([...s.lco, ...a.lco], 3);
-  s.fn = uniq([...s.fn, ...a.fn, ...(opt.legal ? legalNames(t) : [])], 6);
+  s.fn = mergeNames([...s.fn, ...a.fn, ...(opt.legal ? legalNames(t) : [])], 6);
   if (!s.title) s.title = a.title;
   if (!s.desc) s.desc = a.desc;
   s.eu = s.eu || a.eu;

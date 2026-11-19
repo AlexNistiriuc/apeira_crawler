@@ -77,7 +77,9 @@
         "domanda_reale",
         "da_verificare",
         "fonti",
-        "nota_alex"
+        "nota_alex",
+        "eta_stimata",
+        "fonti_eta"
       ]
     },
     "db_log": {

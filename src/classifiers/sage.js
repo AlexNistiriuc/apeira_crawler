@@ -66,7 +66,7 @@ const SCORE_LEVELS = [
   { level: 100, description: 'Candidata eccezionale e pienamente verificata.' },
 ];
 
-function trim(value, max) {
+export function trim(value, max) {
   const s = String(value || '');
   return s.length > max ? s.slice(0, max) : s;
 }
@@ -176,7 +176,7 @@ function questions(candidate) {
 
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-async function sageCall(path, payload) {
+export async function sageCall(path, payload) {
   const key = process.env.SAGE_API_KEY;
   if (!key) throw Object.assign(new Error('Manca SAGE_API_KEY'), { fatal: true });
   const base = (process.env.SAGE_API_URL || DEFAULT_URL).replace(/\/+$/, '');

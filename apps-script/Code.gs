@@ -19,7 +19,7 @@
 var SCHEMA = {
   db_hub: { key: 'hub_id', columns: ['hub_id', 'nome', 'url', 'origine', 'tipo', 'stato', 'priorita', 'scoperto_il', 'note', 'ultimo_crawl', 'pagine_lette', 'candidati_trovati', 'candidati_da_valutare', 'cursore', 'fallimenti'] },
   db_candidati: { key: 'dominio', columns: ['dominio', 'nome', 'sito', 'hub_origine', 'primo_visto', 'ultimo_check', 'stato_crawler', 'motivo', 'dominio_registrato', 'primo_archivio', 'anni_sul_sito', 'settori', 'punteggio_deep', 'europa', 'segnali_funding', 'email', 'linkedin_azienda', 'linkedin_persone', 'founder_nomi', 'team_stima', 'descrizione', 'domanda_reale', 'evidenze', 'pagine_lette', 'versione_crawler', 'snowball_il'] },
-  db_valutazioni: { key: 'id', columns: ['id', 'dominio', 'classificatore', 'versione', 'valutato_il', 'esito', 'fit', 'voto', 'motivo', 'fondazione', 'grant', 'investimenti', 'accesso_lab', 'team', 'eta_founder', 'under30', 'domanda_reale', 'da_verificare', 'fonti', 'nota_alex'] },
+  db_valutazioni: { key: 'id', columns: ['id', 'dominio', 'classificatore', 'versione', 'valutato_il', 'esito', 'fit', 'voto', 'motivo', 'fondazione', 'grant', 'investimenti', 'accesso_lab', 'team', 'eta_founder', 'under30', 'domanda_reale', 'da_verificare', 'fonti', 'nota_alex', 'eta_stimata', 'fonti_eta'] },
   db_log: { key: null, columns: ['componente', 'inizio', 'fine', 'statistiche'] }
 };
 var ENUMS = {
@@ -259,13 +259,19 @@ var VIEW_COLUMNS = [
   'Email', 'LinkedIn azienda', 'LinkedIn founder', 'Founder (nomi)', 'Età founder (stima)', 'Pool di provenienza', 'Link pool', 'Descrizione',
   // nuove, dalla valutazione
   'Esito criteri rigidi', 'Voto', 'Motivo', 'Valutata da', 'Fondazione', 'Grant', 'Investimenti esterni', 'Accesso lab', 'Team',
-  'Domanda reale', 'Da verificare', 'Nota Alex'];
+  'Domanda reale', 'Da verificare', 'Nota Alex', 'Età CEO/CTO (stima)', 'Fonti età'];
 
 /**
  * Ricostruisce il tab Startup trovate: una riga per startup non esclusa, con la valutazione del classificatore che ha la precedenza
  * (proprietà PRECEDENZA, default "sage,claude,euristico"). Con VISTA_RICHIEDE (default "sage") entrano solo le startup
  * già valutate da quel classificatore. Gira ogni ora. Le note in colonna "Nota Alex" si conservano.
  */
+/** Stima d'età di CEO e CTO: più "sotto 30" sale, "35 o più" scende. Serve solo a ordinare. */
+function ageRank_(v) {
+  var t = String(v.eta_stimata || '');
+  return (t.match(/sotto 30/g) || []).length - (t.match(/35 o più/g) || []).length;
+}
+
 function buildViews() {
   return withLock_(function () { return buildViews_(); });
 }
@@ -295,7 +301,7 @@ function buildViews_() {
   }).filter(function (x) { return x.v && x.v.esito !== 'Esclusa'; });
   rows.sort(function (a, b) {
     var ra = rank[a.v.esito] * 2 + (a.v.under30 === 'sì' ? 0 : 1), rb = rank[b.v.esito] * 2 + (b.v.under30 === 'sì' ? 0 : 1);
-    return ra - rb || frank[a.v.fit] - frank[b.v.fit] || Number(b.v.voto) - Number(a.v.voto);
+    return ra - rb || frank[a.v.fit] - frank[b.v.fit] || ageRank_(b.v) - ageRank_(a.v) || Number(b.v.voto) - Number(a.v.voto);
   });
   var sh = SpreadsheetApp.getActive().getSheetByName(VIEW_TAB) || ensureTab_(SpreadsheetApp.getActive(), VIEW_TAB, VIEW_COLUMNS);
   // le note scritte a mano nella vista vengono salvate in db_valutazioni.nota_alex prima di ricostruire
@@ -316,7 +322,7 @@ function buildViews_() {
       c.email, c.linkedin_azienda, c.linkedin_persone, c.founder_nomi, v.eta_founder, hubs.join(' ; '),
       hubs.map(function (h) { return hubUrl[h] || ''; }).filter(String).join(' ; '), c.descrizione,
       v.esito, v.voto, v.motivo, v.classificatore + ' ' + v.versione, v.fondazione, v.grant, v.investimenti, v.accesso_lab, v.team,
-      v.domanda_reale, v.da_verificare, v.nota_alex].map(cell_);
+      v.domanda_reale, v.da_verificare, v.nota_alex, v.eta_stimata, v.fonti_eta].map(cell_);
   });
   sh.clearContents();
   if (sh.getMaxColumns() < VIEW_COLUMNS.length) sh.insertColumnsAfter(sh.getMaxColumns(), VIEW_COLUMNS.length - sh.getMaxColumns());

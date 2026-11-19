@@ -93,3 +93,10 @@ test('robots.txt', () => {
   const r = parseRobots('User-agent: Googlebot\nDisallow: /\n\nUser-agent: *\nDisallow: /private\nAllow: /');
   assert.deepEqual(r, ['/private']);
 });
+
+test('nomi dei founder con ruolo CEO/CTO', () => {
+  const s = scanPage(emptySignals(), page(`<p>${'We build quantum sensors. '.repeat(5)}</p><p>Anna Rossi, CEO</p><p>Marco Bianchi | CTO</p><p>Luca Verdi, Co-Founder</p>`));
+  assert.ok(s.fn.includes('Anna Rossi (CEO)'), s.fn.join('; '));
+  assert.ok(s.fn.includes('Marco Bianchi (CTO)'));
+  assert.ok(s.fn.includes('Luca Verdi'));
+});
