@@ -33,6 +33,26 @@ const FIT_OPTIONS = [
 
 const FIT_TO_SHEET = { high: 'Alto', medium: 'Medio', low: 'Basso' };
 
+// Quale soglia rigida è superata. Serve a due cose: dire ad Alex perché una startup è esclusa,
+// e impedire esclusioni senza una soglia precisa (fuori target va nel fit e nel voto, non nell'esito).
+const GATE_OPTIONS = [
+  { option: 'none', description: 'No hard-gate threshold is proven to be exceeded.' },
+  { option: 'founded_before_2025', description: 'Public evidence shows the company was founded before 2025.' },
+  { option: 'investment_over_500k', description: 'Public evidence shows more than US$500k of outside investment (equity, convertible, or a priced round such as seed or Series A).' },
+  { option: 'grants_over_1m', description: 'Public evidence shows more than US$1M of grants in total.' },
+  { option: 'team_over_5', description: 'Public evidence shows a team of more than five people.' },
+  { option: 'founder_over_34', description: 'A founder publicly states an age of 35 or more.' },
+  { option: 'own_lab', description: 'Public evidence shows a company-owned lab or substantial established external lab access.' },
+];
+const GATE_TO_TEXT = {
+  founded_before_2025: 'fondata prima del 2025',
+  investment_over_500k: 'investimenti esterni oltre 500k USD',
+  grants_over_1m: 'grant oltre 1M USD',
+  team_over_5: 'team oltre 5 persone',
+  founder_over_34: 'founder con 35 anni o più',
+  own_lab: 'lab proprio o accesso a lab sostanziale',
+};
+
 const SCORE_LEVELS = [
   { level: 0, description: 'Esclusa con violazione netta o completamente fuori target.' },
   { level: 15, description: 'Esclusa o quasi certamente fuori target.' },
@@ -142,6 +162,11 @@ function questions(candidate) {
       options: FIT_OPTIONS,
     },
     {
+      id: 'soglia', kind: 'choice',
+      instructions: `Search target: ${searchTarget}. Which hard-gate threshold, if any, is proven exceeded by the supplied evidence and filtered web research? Choose none unless a specific fact proves it. Being off-target, weakly deep-tech or non-European is not a hard gate.`,
+      options: GATE_OPTIONS,
+    },
+    {
       id: 'voto', kind: 'scale',
       instructions: `Search target: ${searchTarget}. Score this startup for outreach priority using the supplied evidence and filtered web research. Respect the rubric: qualified with strong fit is 85+, promising but unverified is 60-84, weak fit is 30-59, excluded or off-target is under 30. Treat LinkedIn snippets only as discovery hints.`,
       levels: SCORE_LEVELS,
@@ -232,7 +257,7 @@ async function sageResearch(candidate) {
 
 function answerMap(body) {
   const answers = body?.results?.[0]?.answers;
-  if (!Array.isArray(answers) || answers.length !== 3) throw new Error('Risposta Sage incompleta');
+  if (!Array.isArray(answers) || answers.length < 3) throw new Error('Risposta Sage incompleta');
   const map = {};
   for (const answer of answers) {
     if (!answer?.ok) throw new Error(`Decisione Sage fallita: ${answer?.error?.code || answer?.error || 'errore sconosciuto'}`);
@@ -265,9 +290,10 @@ function mergeSources(existing, grounded) {
   ])].join(', ');
 }
 
-function safeOutcome(sage, baseline) {
+function safeOutcome(sage, baseline, gate) {
   if (baseline.esito === 'Esclusa') return 'Esclusa';
-  if (sage.chosen === 'excluded') return 'Esclusa';
+  // un'esclusione di Sage vale solo se indica una soglia precisa
+  if (sage.chosen === 'excluded') return gate && gate !== 'none' ? 'Esclusa' : 'Needs verification';
   if (sage.chosen !== 'qualified') return 'Needs verification';
   const min = Number(process.env.SAGE_MIN_QUALIFY_PROBABILITY || MIN_QUALIFY_PROBABILITY);
   if (baseline.esito !== 'Qualificata' || !Number.isFinite(sage.probability) || sage.probability < min) return 'Needs verification';
@@ -280,6 +306,7 @@ function safeScore(expectation, esito) {
   score = Math.max(0, Math.min(100, score));
   if (esito === 'Esclusa') score = Math.min(score, 29);
   if (esito === 'Qualificata') score = Math.max(score, 85);
+  if (esito === 'Needs verification') score = Math.min(score, 84);   // rubrica: 85+ solo per le qualificate
   return score;
 }
 
@@ -302,7 +329,7 @@ function promising(sage) {
 
 export default {
   name: 'sage',
-  version: 'sage-2-v7',
+  version: 'sage-2-v8',
   rankBy: 'euristico',
   parallel: Number(process.env.SAGE_PARALLEL || 3),
   writeEvery: 10,
@@ -326,11 +353,13 @@ export default {
     if (full) usage.completi++;
 
     const sage = response.decisions;
-    const esito = safeOutcome(sage.esito, baseline);
+    const gate = sage.soglia?.chosen;
+    const esito = safeOutcome(sage.esito, baseline, gate);
     const fit = FIT_TO_SHEET[sage.fit.chosen] || baseline.fit;
     const voto = safeScore(sage.voto.expectation, esito);
     const downgraded = sage.esito.chosen === 'qualified' && esito !== 'Qualificata';
-    const sageExcluded = sage.esito.chosen === 'excluded' && baseline.esito !== 'Esclusa';
+    const sageExcluded = esito === 'Esclusa' && baseline.esito !== 'Esclusa';
+    const unprovenExclusion = sage.esito.chosen === 'excluded' && esito !== 'Esclusa';
     const reason = baseline.motivo || 'valutazione sulle evidenze disponibili';
     return {
       ...baseline,
@@ -340,7 +369,8 @@ export default {
       voto,
       motivo: downgraded
         ? `Sage non qualifica senza verifica completa; ${reason}`
-        : sageExcluded ? `Sage rileva una soglia rigida superata; ${reason}` : reason,
+        : sageExcluded ? `Sage: ${GATE_TO_TEXT[gate] || 'soglia rigida superata'} (vedi fonti)`
+        : unprovenExclusion ? `Sage tende a escludere ma senza una soglia precisa; ${reason}` : reason,
       da_verificare: esito === 'Needs verification' && !baseline.da_verificare
         ? 'decisione Sage non abbastanza certa'
         : baseline.da_verificare,

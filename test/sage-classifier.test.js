@@ -5,6 +5,7 @@ const sage = (await import('../src/classifiers/sage.js')).default;
 const originalFetch = globalThis.fetch;
 const originalKey = process.env.SAGE_API_KEY;
 let responseBody;
+let gateForExcluded = 'investment_over_500k';
 let researchBody;
 let requestBody;
 
@@ -45,6 +46,7 @@ function sageResponse(outcome, probability, fit = 'high', score = 88, sources = 
         grounding_meta: { triggered: sources.length > 0, sources },
       } },
       { ok: true, result: { id: 'fit', kind: 'choice', result: { chosen: fit, probability: 0.9 } } },
+      { ok: true, result: { id: 'soglia', kind: 'choice', result: { chosen: outcome === 'excluded' ? gateForExcluded : 'none', probability: 0.9 } } },
       { ok: true, result: { id: 'voto', kind: 'scale', result: { expectation: score, confidence: 0.8 } } },
     ] }],
   };
@@ -72,7 +74,7 @@ test('Sage ricerca la società, filtra le fonti e poi decide in batch', async ()
   assert.match(researchBody.content, /^Company: Qubo\. Domain: qubo\.ai\./);
   assert.deepEqual(researchBody.grounding, { trigger: 'always', confidence_floor: 0.85 });
   assert.equal(requestBody.reasoning, 'on');
-  assert.deepEqual(requestBody.requests[0].questions.map(q => q.id), ['esito', 'fit', 'voto']);
+  assert.deepEqual(requestBody.requests[0].questions.map(q => q.id), ['esito', 'fit', 'soglia', 'voto']);
   for (const question of requestBody.requests[0].questions) {
     assert.equal(question.grounding, undefined);
   }
@@ -148,4 +150,28 @@ test('i consumi vengono contati', () => {
   const s = sage.stats();
   assert.ok(s.chiamate > 0);
   assert.ok(s.leggeri >= 2 && s.promossi >= 1 && s.saltati_esclusi >= 1);
+});
+
+test('esclusione Sage con soglia precisa: motivo leggibile', async () => {
+  gateForExcluded = 'investment_over_500k';
+  responseBody = sageResponse('excluded', 0.9, 'medium', 10);
+  const r = await sage.classify(candidate);
+  assert.equal(r.esito, 'Esclusa');
+  assert.match(r.motivo, /investimenti esterni oltre 500k/);
+});
+
+test('esclusione Sage senza soglia precisa: diventa Needs verification', async () => {
+  gateForExcluded = 'none';
+  responseBody = sageResponse('excluded', 0.9, 'low', 5);
+  const r = await sage.classify(candidate);
+  assert.equal(r.esito, 'Needs verification');
+  assert.match(r.motivo, /senza una soglia precisa/);
+  gateForExcluded = 'investment_over_500k';
+});
+
+test('Needs verification non supera 84 di voto', async () => {
+  responseBody = sageResponse('needs_verification', 0.9, 'high', 100);
+  const r = await sage.classify({ ...candidate, ev: { ...candidate.ev, fa: { a: [] } } });
+  assert.equal(r.esito, 'Needs verification');
+  assert.equal(r.voto, 84);
 });
