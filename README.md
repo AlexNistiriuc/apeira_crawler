@@ -17,15 +17,22 @@ scrivono, ognuno solo nelle sue colonne:
 
 | pezzo | cosa fa | quando gira |
 | --- | --- | --- |
-| crawler hub | aggiunge pool: semi, reti di incubatori (EBN, UKSPA), snowball dai siti delle startup | GitHub Actions, ogni giorno alle 05:00 |
-| crawler startup | legge i pool, trova i siti delle startup, controlla età, funding, settore, team, contatti, salva le evidenze | GitHub Actions, ogni ora, giri da ~50 minuti (praticamente continuo) |
+| crawler hub | aggiunge pool: semi, reti di incubatori (EBN, UKSPA), snowball dai siti delle startup | GitHub Actions, alla fine di ogni giro del crawler startup |
+| crawler startup | legge i pool, trova i siti delle startup, controlla età, funding, settore, team, contatti, salva le evidenze | GitHub Actions, a catena senza sosta (giri da ~45 minuti) |
 | classificatore euristico | i criteri rigidi della v1, come base di confronto | subito dopo ogni giro del crawler startup |
-| classificatore Sage | decide esito, fit e voto sui 30 candidati euristici migliori | GitHub Actions, 12:00 e 18:30 ora di Roma |
+| classificatore Sage | decide esito, fit e voto dopo l'euristico; completo (ricerca web + reasoning) per Fit Alto/Medio, leggero per Fit Basso | GitHub Actions, dopo ogni giro del crawler e a catena finché la coda non è vuota |
 | Claude con la skill | verifica manuale delle fonti e fallback | su richiesta |
 
 Il crawler non dà voti: scarta solo ciò che è certo (round già chiuso, fondata prima del 2025,
 azienda grande, investitore, non deep tech, dominio vecchio) e passa tutto il resto ai classificatori
 con le evidenze. Così si può cambiare modello di classificazione senza toccare i crawler.
+
+Solo le startup valutate da Sage entrano in **Startup trovate** (proprietà di script `VISTA_RICHIEDE`, default `sage`).
+
+**Fermare tutto lo scouting:** Settings > Secrets and variables > Actions > Variables, crea la variabile
+`SCOUTING_ATTIVO` con valore `no`. I giri in corso finiscono, i successivi non partono. Per ripartire cancellala.
+
+I consumi di Sage di ogni giro sono in `db_log` (statistiche.consumo: chiamate, token, ricerche web, giri completi e leggeri).
 
 ## Struttura
 

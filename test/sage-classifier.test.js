@@ -101,3 +101,51 @@ test('un criterio rigido mancante impedisce la qualifica', async () => {
   assert.equal(result.esito, 'Needs verification');
   assert.match(result.da_verificare, /età founder/);
 });
+
+// ---- uso dei crediti ----
+
+const weak = {
+  dominio: 'weak.io', nome: 'Weak', sito: 'https://weak.io/', settori: 'Robotics/Physical AI', europa: 'non trovato',
+  ev: { anni_dichiarati: [], eu: false, deep: 4, neg: 1, tags: ['Robotics/Physical AI'], dem: [], ts: {}, fa: { a: [] }, evd: { g: [], i: [] }, estratto_home: 'Robots.' },
+};
+
+test('Fit Basso: modalità leggera, niente ricerca web e niente reasoning', async () => {
+  responseBody = sageResponse('needs_verification', 0.8, 'low', 35);
+  const result = await sage.classify(weak);
+  assert.equal(researchBody, null, 'nessuna ricerca web pagata');
+  assert.equal(requestBody.reasoning, 'off');
+  assert.match(result.versione, /leggero/);
+});
+
+test('Fit Basso ma Sage vede qualcosa di buono: si rifà in modalità completa', async () => {
+  const calls = [];
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url, options) => { calls.push([url, JSON.parse(options.body).reasoning]); return orig(url, options); };
+  responseBody = sageResponse('needs_verification', 0.8, 'high', 72);
+  const result = await sage.classify(weak);
+  assert.deepEqual(calls.map(c => c[0].split('/').pop()), ['batch', 'decide', 'batch']);
+  assert.equal(calls[2][1], 'on');
+  assert.match(result.versione, /completo/);
+});
+
+test('esclusa dall\'euristico: Sage non viene chiamato', async () => {
+  let called = false;
+  globalThis.fetch = async () => { called = true; throw new Error('non doveva chiamare'); };
+  const old = { ...candidate, ev: { ...candidate.ev, anni_dichiarati: [2019] } };
+  const result = await sage.classify(old);
+  assert.equal(called, false);
+  assert.equal(result.esito, 'Esclusa');
+});
+
+test('credito finito o chiave non valida: errore fatale, niente nuovi tentativi', async () => {
+  let n = 0;
+  globalThis.fetch = async () => { n++; return Response.json({ error: { code: 'insufficient_credit' } }, { status: 402 }); };
+  await assert.rejects(sage.classify(candidate), e => e.fatal === true);
+  assert.equal(n, 1);
+});
+
+test('i consumi vengono contati', () => {
+  const s = sage.stats();
+  assert.ok(s.chiamate > 0);
+  assert.ok(s.leggeri >= 2 && s.promossi >= 1 && s.saltati_esclusi >= 1);
+});

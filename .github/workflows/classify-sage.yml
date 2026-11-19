@@ -1,37 +1,40 @@
 name: classificatore Sage
+# Valuta con Sage i candidati già passati dall'euristico, finché la coda non è vuota.
+# Parte: alla fine di ogni giro del crawler startup, da sé stesso se resta lavoro, e ogni ora come riserva.
+# Per fermare tutto lo scouting: Settings > Secrets and variables > Actions > Variables,
+# variabile SCOUTING_ATTIVO = no (per ripartire: cancellala o mettila a si).
 on:
   schedule:
-    # Due tentativi per fascia coprono ora solare e legale; il gate usa Europe/Rome.
-    - cron: '0 10,11 * * *'
-    - cron: '30 16,17 * * *'
+    - cron: '40 * * * *'
   workflow_dispatch:
     inputs:
-      limite: { description: 'quanti candidati al massimo', default: '30' }
+      limite: { description: 'quanti candidati al massimo in questo giro', default: '300' }
+concurrency: { group: classificatore-sage, cancel-in-progress: false }
+permissions:
+  contents: read
+  actions: write   # solo per far ripartire il giro successivo
 jobs:
   run:
+    if: vars.SCOUTING_ATTIVO != 'no'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 55
     steps:
-      - id: gate
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            hour=$(TZ=Europe/Rome date +%H)
-            if [ "$hour" = "12" ] || [ "$hour" = "18" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
-          fi
       - uses: actions/checkout@v4
-        if: steps.gate.outputs.run == 'true'
       - uses: actions/setup-node@v4
-        if: steps.gate.outputs.run == 'true'
         with: { node-version: 20, cache: npm }
       - run: npm ci
-        if: steps.gate.outputs.run == 'true'
-      - run: npm run classify -- sage ${{ inputs.limite || '30' }}
-        if: steps.gate.outputs.run == 'true'
+      - id: sage
+        run: npm run classify -- sage ${{ inputs.limite || '300' }}
         env:
           SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
           SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
           SAGE_API_KEY: ${{ secrets.SAGE_API_KEY }}
+          RUN_MINUTES: 40
+          REFRESH_VIEW: '1'
+      # catena: se in coda resta lavoro, riparte subito. Si ferma da sola con coda vuota o con un errore
+      # (per esempio credito Sage finito), così non si sprecano né minuti né crediti.
+      - if: steps.sage.outcome == 'success' && steps.sage.outputs.altro_lavoro == 'true'
+        run: gh workflow run classify-sage.yml --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}

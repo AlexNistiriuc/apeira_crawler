@@ -263,18 +263,25 @@ var VIEW_COLUMNS = [
 
 /**
  * Ricostruisce il tab Startup trovate: una riga per startup non esclusa, con la valutazione del classificatore che ha la precedenza
- * (proprietà PRECEDENZA, default "sage,claude,euristico"). Gira ogni ora. Le note in colonna "Nota Alex" si conservano.
+ * (proprietà PRECEDENZA, default "sage,claude,euristico"). Con VISTA_RICHIEDE (default "sage") entrano solo le startup
+ * già valutate da quel classificatore. Gira ogni ora. Le note in colonna "Nota Alex" si conservano.
  */
 function buildViews() {
   return withLock_(function () { return buildViews_(); });
 }
 
 function buildViews_() {
-  var configured = PropertiesService.getScriptProperties().getProperty('PRECEDENZA') || 'sage,claude,euristico';
+  var props = PropertiesService.getScriptProperties();
+  var configured = props.getProperty('PRECEDENZA') || 'sage,claude,euristico';
   var order = configured.split(',');
   if (order.indexOf('sage') < 0) order.unshift('sage'); // migra automaticamente la vecchia precedenza
+  // VISTA_RICHIEDE: in Startup trovate entrano solo le startup valutate da questo classificatore
+  // (default "sage": prima l'euristico, poi Sage, poi la vista). Vuoto = qualunque valutatore.
+  var required = props.getProperty('VISTA_RICHIEDE');
+  if (required === null) required = 'sage';
   var best = {};
   readRows_('db_valutazioni', null).forEach(function (v) {
+    if (required && v.classificatore !== required) return;
     var p = order.indexOf(v.classificatore); if (p < 0) p = order.length;
     var cur = best[v.dominio];
     if (!cur || p < cur._p) { v._p = p; best[v.dominio] = v; }

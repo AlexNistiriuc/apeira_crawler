@@ -47,6 +47,9 @@ export async function upsert(tab, key, rows, batch = 200) {
 
 export async function append(tab, rows) { return call('append', { tab, rows }); }
 
+/** Ricostruisce subito la vista Startup trovate (di solito lo fa Apps Script ogni ora). */
+export async function views() { return call('views', {}); }
+
 /** Candidati che un classificatore non ha ancora valutato (o valutato prima dell'ultimo controllo). */
 export async function queue(classifier, limit = 200, rank_by) {
   return (await call('queue', { classifier, limit, rank_by })).rows || [];

@@ -1,12 +1,21 @@
 // Classificatore Levanto Sage. Sage prende le decisioni (esito, fit e voto) in
 // un'unica richiesta batch; l'euristico resta il guardrail deterministico e
 // fornisce i campi di evidenza leggibili nel foglio.
+//
+// Uso sensato dei crediti. Sage costa poco in input, molto in output (il reasoning conta
+// come output) e ogni ricerca web si paga a parte. Quindi due livelli:
+//  - completo (ricerca web + reasoning) per i candidati che l'euristico giudica Fit Alto o Medio;
+//  - leggero (niente ricerca, niente reasoning) per i Fit Basso. Se il leggero vede qualcosa
+//    di buono (fit alto, voto >= 60, o qualificata) si rifà subito in modalità completa.
+// Le escluse dall'euristico non arrivano mai a Sage (zero crediti).
+// I consumi di ogni giro finiscono in db_log (statistiche.consumo).
 import { CRITERIA as C } from '../lib/config.js';
 import euristico from './euristico.js';
 
 const DEFAULT_URL = 'https://sage.levanto.ai';
 const MIN_QUALIFY_PROBABILITY = 0.85;
-const RETRIES = 2;
+const RETRIES = 3;
+const LIGHT_ESCALATE_SCORE = Number(process.env.SAGE_LIGHT_ESCALATE_SCORE || 60);
 const REASONING_MODES = new Set(['off', 'auto', 'on']);
 const GROUNDING_TRIGGERS = new Set(['never', 'low_confidence', 'always']);
 
@@ -93,6 +102,15 @@ function candidateContent(c, baseline, webResearch = []) {
   });
 }
 
+const usage = { chiamate: 0, input_tokens: 0, output_tokens: 0, ricerche_web: 0, completi: 0, leggeri: 0, promossi: 0, saltati_esclusi: 0 };
+function track(body, grounded) {
+  usage.chiamate++;
+  const u = body?.meta?.usage || body?.usage || {};
+  usage.input_tokens += Number(u.input_tokens) || 0;
+  usage.output_tokens += Number(u.output_tokens) || 0;
+  if (grounded && body?.grounding_meta?.triggered !== false) usage.ricerche_web++;
+}
+
 function reasoningMode() {
   const mode = process.env.SAGE_REASONING || 'on';
   if (!REASONING_MODES.has(mode)) throw new Error(`SAGE_REASONING non valido: ${mode}`);
@@ -135,7 +153,7 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function sageCall(path, payload) {
   const key = process.env.SAGE_API_KEY;
-  if (!key) throw new Error('Manca SAGE_API_KEY');
+  if (!key) throw Object.assign(new Error('Manca SAGE_API_KEY'), { fatal: true });
   const base = (process.env.SAGE_API_URL || DEFAULT_URL).replace(/\/+$/, '');
   const timeout = Number(process.env.SAGE_TIMEOUT_MS || 30_000);
   let last;
@@ -154,22 +172,26 @@ async function sageCall(path, payload) {
         const code = body?.error?.code || body?.code || `HTTP ${response.status}`;
         const err = new Error(`Sage ${code}`);
         err.retryable = response.status === 429 || response.status >= 500 || body?.error?.retryable === true;
+        // chiave non valida, credito finito, accesso negato: inutile continuare a spendere tentativi
+        err.fatal = [401, 402, 403].includes(response.status);
+        err.status = response.status;
         throw err;
       }
+      track(body, Boolean(payload.grounding));
       return body;
     } catch (error) {
       last = error;
-      const retryable = error.retryable || error.name === 'TimeoutError' || error.name === 'AbortError' || error instanceof TypeError;
+      const retryable = !error.fatal && (error.retryable || error.name === 'TimeoutError' || error.name === 'AbortError' || error instanceof TypeError);
       if (!retryable || attempt === RETRIES) break;
-      await wait(500 * (2 ** attempt));
+      await wait(error.status === 429 ? 5000 * (attempt + 1) : 1000 * (2 ** attempt));
     }
   }
   throw last;
 }
 
-async function sageBatch(content, candidate) {
+async function sageBatch(content, candidate, reasoning = reasoningMode()) {
   return sageCall('/decide/batch', {
-    reasoning: reasoningMode(),
+    reasoning,
     requests: [{ content, questions: questions(candidate) }],
   });
 }
@@ -261,15 +283,48 @@ function safeScore(expectation, esito) {
   return score;
 }
 
+const NO_RESEARCH = { evidence: [], sources: [] };
+
+async function decideOnce(c, baseline, full) {
+  const research = full ? await sageResearch(c) : NO_RESEARCH;
+  const response = answerMap(await sageBatch(candidateContent(c, baseline, research.evidence), c, full ? reasoningMode() : 'off'));
+  return { research, response };
+}
+
+function wantsFull(baseline) {
+  if (process.env.SAGE_TIERING === 'off') return true;
+  return baseline.fit === 'Alto' || baseline.fit === 'Medio';
+}
+
+function promising(sage) {
+  return sage.esito.chosen === 'qualified' || sage.fit.chosen === 'high' || Number(sage.voto.expectation) >= LIGHT_ESCALATE_SCORE;
+}
+
 export default {
   name: 'sage',
-  version: 'sage-2-v6',
+  version: 'sage-2-v7',
   rankBy: 'euristico',
+  parallel: Number(process.env.SAGE_PARALLEL || 3),
+  writeEvery: 10,
+  stats: () => ({ ...usage }),
 
   async classify(c) {
     const baseline = await euristico.classify(c);
-    const research = await sageResearch(c);
-    const response = answerMap(await sageBatch(candidateContent(c, baseline, research.evidence), c));
+    // esclusa con prove certe dall'euristico: Sage non cambierebbe l'esito, non si spende niente
+    if (baseline.esito === 'Esclusa') { usage.saltati_esclusi++; return { ...baseline, versione: this.version + ' (solo euristico)' }; }
+
+    let full = wantsFull(baseline);
+    let { research, response } = await decideOnce(c, baseline, full);
+    if (!full) {
+      usage.leggeri++;
+      if (promising(response.decisions)) {
+        usage.promossi++;
+        full = true;
+        ({ research, response } = await decideOnce(c, baseline, true));
+      }
+    }
+    if (full) usage.completi++;
+
     const sage = response.decisions;
     const esito = safeOutcome(sage.esito, baseline);
     const fit = FIT_TO_SHEET[sage.fit.chosen] || baseline.fit;
@@ -279,6 +334,7 @@ export default {
     const reason = baseline.motivo || 'valutazione sulle evidenze disponibili';
     return {
       ...baseline,
+      versione: `${this.version} ${full ? 'completo' : 'leggero'}`,
       esito,
       fit,
       voto,
