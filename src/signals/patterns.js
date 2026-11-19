@@ -38,8 +38,8 @@ export const FA_G = /(graduated|graduation|graduating|laure[ao]t[oa]|abschluss|d
 export const FA_A = /\b([1-6]\d)[- ]year[- ]old\b|\baged ([1-6]\d)\b/gi;
 
 // Dimensione del team
-export const TS_E1 = /(?:team of|we are|we're|a team of|group of|over|more than)\s+(\d{1,4})\+?\s+(?:people|engineers|scientists|researchers|experts|members|employees|professionals|persone|mitarbeiter(?:innen)?|colleagues|talents)/gi;
-export const TS_E2 = /\b(\d{1,4})\+?\s*(?:employees|mitarbeiter(?:innen)?|mitarbeitende|dipendenti|collaboratori|salariés|collaborateurs|team members|full-time staff)/gi;
+export const TS_E1 = /(?:team of|we are|we're|a team of|group of)\s+(\d{1,4})\+?\s+(?:people|engineers|scientists|researchers|experts|members|employees|professionals|persone|mitarbeiter(?:innen)?|colleagues|talents)/gi;
+export const TS_E2 = /(?:we\s+(?:employ|have)|(?:our|the)\s+(?:company|startup|team)\s+(?:employs|has|includes|comprises|counts)|(?:our\s+)?team\s+consists of|(?:number of\s+)?(?:employees|mitarbeiter(?:innen)?|mitarbeitende|dipendenti|collaboratori|salariés|collaborateurs|team members|full-time staff)\s*[:：])\s*(\d{1,4})\+?\s*(?:people|engineers|scientists|researchers|experts|members|employees|professionals|persone|mitarbeiter(?:innen)?|mitarbeitende|dipendenti|collaboratori|salariés|collaborateurs|team members|full-time staff)?/gi;
 export const TS_LI = /linkedin\.com\/in\/([a-z0-9\-_%]+)/gi;
 export const TS_R = /\b(co-?founder|founder|ceo|cto|coo|cfo|cso|cpo|chief [a-z]+ officer|head of [a-z]+|(?:senior |junior |lead |principal )?(?:software|hardware|ml|ai|research|mechanical|electrical|electronics|embedded|quantum|process|data)?\s?(?:engineer|scientist|researcher|developer)|phd student|intern|product manager|designer|business developer)\b/gi;
 
@@ -47,6 +47,6 @@ export const TS_R = /\b(co-?founder|founder|ceo|cto|coo|cfo|cso|cpo|chief [a-z]+
 export const EV_M = /(?:(€|eur|euro|\$|usd|£|gbp|chf)\s?(\d+(?:[.,]\d+)?)\s?(k|m|mn|million|millions|mio|millionen|milioni|thousand)?|(\d+(?:[.,]\d+)?)\s?(k|m|mn|million|millions|mio|millionen|milioni|thousand)?\s?(€|eur|euro|euros|usd|dollars|£|gbp|chf))/gi;
 export const EV_G = /(grant|eic|horizon|exist|innosuisse|bpifrance|i-lab|i-nov|prize|award|förder|subsid|fondo perduto|innovate uk|sbir|esa contract|venture kick|non-dilutive)/i;
 export const EV_I = /(raised|raise|investment|invested|round|pre-seed|preseed|seed|equity|backed by|funding from|led by|angel|vc\b|venture capital)/i;
-export const EV_LC = /(our (own )?(lab|laboratory|labs|cleanroom|clean room|facility|facilities|workshop)|in-house (lab|laboratory|labs|facilities|cleanroom)|we (built|opened|operate|run) (a|our) (new )?(lab|laboratory|facility)|(sq ?m|m²|square (feet|metres|meters))[^.]{0,30}(lab|laboratory|facility)|state-of-the-art (lab|laboratory|facility))/i;
+export const EV_LC = /(\bour (own )?(state-of-the-art )?(lab|laboratory|labs|cleanroom|clean room|facility|facilities|workshop)(?!\s+(software|platform|system|solutions?|technology))|in-house (lab|laboratory|labs|facilities|cleanroom)|\bwe (built|opened|operate|run) (a|our) (new )?(lab|laboratory|facility)|(sq ?m|m²|square (feet|metres|meters))[^.]{0,30}(lab|laboratory|facility))/i;
 export const EV_LX = /((access to|use of|using) (the )?[^.]{0,60}(lab|laboratory|labs|cleanroom|facilit)|(incubated|hosted|located|based) (at|in) (the )?[^.]{0,60}(institute|university|universität|université|politecnico|science park|tech park|lab\b|laboratory)|spin-?off (of|from) [^.]{0,60}(institute|university|lab))/i;
 export const EV_F = /(founded|established|gegründet|fondata|fondato|fondée|incorporated|launched|started)\s*(in\s*|im\s*|nel\s*|en\s*)?(?:[a-z]+\s+)?(20[0-2]\d)/gi;

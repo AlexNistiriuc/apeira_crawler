@@ -20,7 +20,8 @@ scrivono, ognuno solo nelle sue colonne:
 | crawler hub | aggiunge pool: semi, reti di incubatori (EBN, UKSPA), snowball dai siti delle startup | GitHub Actions, ogni giorno alle 05:00 |
 | crawler startup | legge i pool, trova i siti delle startup, controlla età, funding, settore, team, contatti, salva le evidenze | GitHub Actions, ogni ora, giri da ~50 minuti (praticamente continuo) |
 | classificatore euristico | i criteri rigidi della v1, come base di confronto | subito dopo ogni giro del crawler startup |
-| Claude con la skill | la valutazione vera, con verifica delle fonti | 12:00 e 18:30, attività programmata |
+| classificatore Sage | decide esito, fit e voto sui 30 candidati euristici migliori | GitHub Actions, 12:00 e 18:30 ora di Roma |
+| Claude con la skill | verifica manuale delle fonti e fallback | su richiesta |
 
 Il crawler non dà voti: scarta solo ciò che è certo (round già chiuso, fondata prima del 2025,
 azienda grande, investitore, non deep tech, dominio vecchio) e passa tutto il resto ai classificatori
@@ -39,8 +40,8 @@ src/lib/                     rete (diretta + Jina, robots.txt), HTML, foglio, co
 src/signals/                 euristiche pure: settori, funding, età, team, evidenze, prefiltro
 src/crawlers/hubs/           crawler degli hub
 src/crawlers/startups/       crawler delle startup (scoperta, directory, controllo, riga)
-src/classifiers/             runner, contratto di uscita, classificatore euristico
-skill/                       skill di Claude per valutare due volte al giorno
+src/classifiers/             runner, contratto di uscita, classificatori euristico e Sage
+skill/                       skill di Claude per verifiche manuali e controllo salute
 tools/migrate-from-chrome.js porta nel foglio i dati della v1 rimasti in Chrome
 test/                        test senza rete: euristiche, Code.gs su finto Sheets, pipeline completa
 ```
@@ -55,13 +56,19 @@ test/                        test senza rete: euristiche, Code.gs su finto Sheet
 2. **Dati della v1.** Nella vecchia scheda Chrome del crawler apri la console e incolla
    `tools/migrate-from-chrome.js`. Porta hub e candidati già controllati.
 3. **GitHub.** Nel repo: Settings > Secrets and variables > Actions, aggiungi
-   `SHEET_API_URL`, `SHEET_API_TOKEN` e, se ha credito, `JINA_KEY`. Le Actions partono da sole;
+   `SHEET_API_URL`, `SHEET_API_TOKEN`, `SAGE_API_KEY` e, se ha credito, `JINA_KEY`. Le Actions partono da sole;
    per provarle subito: Actions > crawler hub > Run workflow, poi crawler startup.
-4. **Claude.** Carica la skill da `skill/` e programma la valutazione due volte al giorno
+4. **Claude.** Carica la skill da `skill/` per le verifiche manuali e il controllo della salute
    (vedi `skill/skills/apeira-startup-scouting/SKILL.md`).
 
 In locale: `npm ci`, poi `set -a; source .env; set +a` (vedi `.env.example`) e
 `npm run hubs`, `npm run startups`, `npm run classify -- euristico`.
+
+Per la valutazione Sage imposta `SAGE_API_KEY` e lancia
+`npm run classify -- sage 30`. Sage valuta prima i candidati con voto euristico più alto;
+usa reasoning e web grounding per tutte e tre le decisioni e conserva in `fonti` gli URL trovati.
+La chiave va conservata solo nell'ambiente locale o nei GitHub Actions secrets.
+`SAGE_REASONING` e `SAGE_GROUNDING_TRIGGER` permettono di cambiare i default `on` e `always`.
 `SHEET_DRY_RUN=1` legge dal foglio senza scrivere. `npm test` gira senza rete.
 
 ## Regole che il codice rispetta

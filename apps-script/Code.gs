@@ -88,7 +88,7 @@ function setup() {
   OLD_TABS.forEach(function (n) { var sh = ss.getSheetByName(n); if (sh) sh.hideSheet(); });
   var props = PropertiesService.getScriptProperties();
   if (!props.getProperty('API_TOKEN')) props.setProperty('API_TOKEN', Utilities.getUuid().replace(/-/g, ''));
-  if (!props.getProperty('PRECEDENZA')) props.setProperty('PRECEDENZA', 'claude,euristico');
+  if (!props.getProperty('PRECEDENZA')) props.setProperty('PRECEDENZA', 'sage,claude,euristico');
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'buildViews') ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('buildViews').timeBased().everyHours(1).create();
   Logger.log('Token API (SHEET_API_TOKEN): ' + props.getProperty('API_TOKEN'));
@@ -263,14 +263,16 @@ var VIEW_COLUMNS = [
 
 /**
  * Ricostruisce il tab Startup trovate: una riga per startup non esclusa, con la valutazione del classificatore che ha la precedenza
- * (proprietà PRECEDENZA, default "claude,euristico"). Gira ogni ora. Le note in colonna "Nota Alex" si conservano.
+ * (proprietà PRECEDENZA, default "sage,claude,euristico"). Gira ogni ora. Le note in colonna "Nota Alex" si conservano.
  */
 function buildViews() {
   return withLock_(function () { return buildViews_(); });
 }
 
 function buildViews_() {
-  var order = (PropertiesService.getScriptProperties().getProperty('PRECEDENZA') || 'claude,euristico').split(',');
+  var configured = PropertiesService.getScriptProperties().getProperty('PRECEDENZA') || 'sage,claude,euristico';
+  var order = configured.split(',');
+  if (order.indexOf('sage') < 0) order.unshift('sage'); // migra automaticamente la vecchia precedenza
   var best = {};
   readRows_('db_valutazioni', null).forEach(function (v) {
     var p = order.indexOf(v.classificatore); if (p < 0) p = order.length;

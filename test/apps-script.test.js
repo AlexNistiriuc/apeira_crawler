@@ -75,6 +75,7 @@ test('coda per classificatore e vista Startup trovate con note conservate', asyn
     { id: 'a.ai|euristico', dominio: 'a.ai', classificatore: 'euristico', versione: '1', valutato_il: '2026-11-17 12:00:00', esito: 'Needs verification', fit: 'Medio', voto: 40 },
     { id: 'b.io|euristico', dominio: 'b.io', classificatore: 'euristico', versione: '1', valutato_il: '2026-11-17 12:00:00', esito: 'Esclusa', fit: 'Basso', voto: 0 },
     { id: 'a.ai|claude', dominio: 'a.ai', classificatore: 'claude', versione: 's1', valutato_il: '2026-11-17 12:00:00', esito: 'Qualificata', fit: 'Alto', voto: 85, under30: 'sì' },
+    { id: 'a.ai|sage', dominio: 'a.ai', classificatore: 'sage', versione: 's2', valutato_il: '2026-11-17 12:00:00', esito: 'Needs verification', fit: 'Alto', voto: 82, under30: 'sì' },
   ] });
   q = (await backend('queue', { classifier: 'euristico', limit: 10 })).rows;
   assert.equal(q.length, 0);
@@ -89,13 +90,13 @@ test('coda per classificatore e vista Startup trovate con note conservate', asyn
   await backend('views', {});
   const cl = sheets.get('Startup trovate').cells;
   assert.equal(cl.length, 2, 'solo a.ai: b.io è Esclusa, c.eu scartata dal crawler');
-  assert.equal(cl[1][cl[0].indexOf('Esito criteri rigidi')], 'Qualificata', 'vince claude per precedenza');
-  assert.equal(cl[1][2], 'Target', 'Stato come nella v1 per l\'outreach');
+  assert.equal(cl[1][cl[0].indexOf('Esito criteri rigidi')], 'Needs verification', 'vince Sage per precedenza');
+  assert.match(cl[1][2], /^Da verificare:/, 'lo stato deriva dalla valutazione Sage');
   assert.deepEqual(cl[0].slice(0, 4), ['Startup', 'Sito', 'Stato', 'Fit']);
   // nota scritta a mano, poi ricostruzione
   cl[1][cl[0].indexOf('Nota Alex')] = 'chiamata fissata';
   await backend('views', {});
   assert.equal(sheets.get('Startup trovate').cells[1][cl[0].indexOf('Nota Alex')], 'chiamata fissata');
-  const ev = (await backend('read', { tab: 'db_valutazioni' })).rows.find(x => x.id === 'a.ai|claude');
+  const ev = (await backend('read', { tab: 'db_valutazioni' })).rows.find(x => x.id === 'a.ai|sage');
   assert.equal(ev.nota_alex, 'chiamata fissata');
 });

@@ -16,7 +16,9 @@ Since v9 the work is split in three independent parts that only talk through the
   funding, sector, team and contacts, and writes every candidate with its evidence to `db_candidati`.
   It only discards what is certain; everything else is `stato_crawler = da_valutare`.
 - **Classifiers** write grades to `db_valutazioni`, one row per startup and classifier.
-  `euristico` runs on GitHub right after each crawler startup run. **Claude is the `claude` classifier**: this skill.
+  `euristico` runs on GitHub right after each crawler startup run. `sage` evaluates the best 30
+  candidates at 12:00 and 18:30 Rome and has precedence in the visible view. **Claude is the
+  `claude` classifier**: this skill, used for manual source verification and fallback.
 
 The code is in https://github.com/AlexNistiriuc/apeira_crawler (branch `v2-sheet-db` until merged).
 Column contract: `contracts/schema.json`. Classifier contract: `contracts/CLASSIFICATORI.md`.
@@ -82,9 +84,10 @@ asleep), say so in one line and stop: don't try other routes to the token.
 Keep javascript_tool results small (the tool times out at ~45 s and long outputs waste budget):
 map rows to the fields you need and trim text before returning it.
 
-## Twice-daily evaluation (12:00 and 18:30 Rome)
+## Manual Claude evaluation
 
-Budget: about 30 candidates per run. Alex can change the number in the scheduled prompt.
+Budget: about 30 candidates per run. Use this flow when Alex explicitly asks for a manual review
+or when the Sage classifier is unavailable.
 
 1. **Crawler health.** Read the last rows of `db_log`:
    `(await api('read',{tab:'db_log'})).rows.slice(-8)`. Check that `crawler startup` ran in the last
@@ -138,8 +141,8 @@ Budget: about 30 candidates per run. Alex can change the number in the scheduled
    - Never write `nota_alex`.
    The sheet rejects invalid rows. If it answers `ok:false`, fix the row and retry.
 
-5. **Refresh the view**: `await api('views')`. This rebuilds the `Startup trovate` tab, the only visible one, which the apeira-outreach skill reads (its first 17 columns are the v1 ones; Stato is "Target" only for Qualificata). When both
-   graded a startup, `claude` grades take precedence over `euristico`.
+5. **Refresh the view**: `await api('views')`. This rebuilds the `Startup trovate` tab, the only visible one, which the apeira-outreach skill reads (its first 17 columns are the v1 ones; Stato is "Target" only for Qualificata). Classifier precedence is
+   `sage`, then `claude`, then `euristico`.
 
 6. **Update Alex in Italian**, short, no em dashes and no colons in prose. Cover:
    - how many you graded and how they split;

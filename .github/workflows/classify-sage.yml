@@ -1,0 +1,37 @@
+name: classificatore Sage
+on:
+  schedule:
+    # Due tentativi per fascia coprono ora solare e legale; il gate usa Europe/Rome.
+    - cron: '0 10,11 * * *'
+    - cron: '30 16,17 * * *'
+  workflow_dispatch:
+    inputs:
+      limite: { description: 'quanti candidati al massimo', default: '30' }
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            hour=$(TZ=Europe/Rome date +%H)
+            if [ "$hour" = "12" ] || [ "$hour" = "18" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
+          fi
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.run == 'true'
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+        if: steps.gate.outputs.run == 'true'
+      - run: npm run classify -- sage ${{ inputs.limite || '30' }}
+        if: steps.gate.outputs.run == 'true'
+        env:
+          SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
+          SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
+          SAGE_API_KEY: ${{ secrets.SAGE_API_KEY }}

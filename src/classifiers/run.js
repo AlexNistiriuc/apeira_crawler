@@ -7,7 +7,7 @@ import { validateEvaluation } from './contract.js';
 
 export async function classifyQueue(clf, limit = 500, log = console.log) {
   const startedAt = now();
-  const rows = await queue(clf.name, limit);
+  const rows = await queue(clf.name, limit, clf.rankBy);
   const out = []; let bad = 0;
   for (const c of rows) {
     try { c.ev = c.evidenze ? JSON.parse(c.evidenze) : {}; } catch { c.ev = {}; }

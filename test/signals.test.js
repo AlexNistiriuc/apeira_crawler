@@ -72,6 +72,23 @@ test('team: dichiarato, LinkedIn, ruoli; advisor esclusi', () => {
   assert.equal(teamEstimate(s2.ts).n, 2);
 });
 
+test('team: non confonde la dimensione dei clienti con quella della startup', () => {
+  const s = emptySignals();
+  scanPage(s, page('<p>Was früher ab 100 Mitarbeitern begann, rechnet sich heute für 12.</p>'));
+  assert.equal(teamEstimate(s.ts).n, null);
+
+  const explicit = emptySignals();
+  scanPage(explicit, page('<p>We employ 4 engineers.</p>'));
+  assert.equal(teamEstimate(explicit.ts).n, 4);
+});
+
+test('lab proprio richiede evidenza esplicita di proprietà', () => {
+  const customer = scanPage(emptySignals(), page('<p>Control robots in your cleanroom through our state-of-the-art facility software.</p>'));
+  assert.equal(customer.evd.lc, '', 'la facility del cliente non è un lab proprio');
+  const owned = scanPage(emptySignals(), page('<p>We test the hardware in our state-of-the-art laboratory.</p>'));
+  assert.match(owned.evd.lc, /our state-of-the-art laboratory/i);
+});
+
 test('robots.txt', () => {
   const r = parseRobots('User-agent: Googlebot\nDisallow: /\n\nUser-agent: *\nDisallow: /private\nAllow: /');
   assert.deepEqual(r, ['/private']);

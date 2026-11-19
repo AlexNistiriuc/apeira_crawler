@@ -69,10 +69,17 @@ sbaglia formato non sporca i dati.
    `{ name, version, async classify(candidato) }` e restituisce i campi di uscita (il runner
    aggiunge id, dominio, classificatore, versione, data). Si lancia con
    `npm run classify -- <nome>`. Esempio: `src/classifiers/euristico.js`.
-2. **Claude con la skill.** Due volte al giorno Claude legge la coda `claude`, valuta e scrive
-   righe con `classificatore = claude`. Vedi `skill/`.
-3. **Qualsiasi altro programma** (un altro modello, uno script, una persona con un form):
+2. **Claude con la skill.** Su richiesta Claude legge la coda `claude`, verifica le fonti e scrive
+   righe con `classificatore = claude`. Serve come revisione manuale o fallback. Vedi `skill/`.
+3. **Sage.** `src/classifiers/sage.js` invia esito, fit e voto al decision model Levanto Sage
+   in due passaggi: una ricerca grounded corta sull'identità della società, filtrata sul dominio
+   ufficiale, poi una richiesta batch con reasoning attivo che usa gli snippet trovati per esito,
+   fit e voto. Gli URL pertinenti vengono aggiunti a `fonti`. Legge la chiave da `SAGE_API_KEY` e
+   usa l'euristico come guardrail per non qualificare quando un criterio rigido manca o è già
+   violato. Sage può usare solo snippet LinkedIn pubblici o link pubblicati dalla startup, senza
+   aprire o leggere pagine LinkedIn; storia lavorativa e range di headcount restano indizi, non prove.
+4. **Qualsiasi altro programma** (un altro modello, uno script, una persona con un form):
    chiama la web app con `queue` e `upsert` come descritto in `apps-script/Code.gs`.
 
 La vista `Startup trovate` sceglie per ogni startup la valutazione del classificatore con più
-precedenza (proprietà di script `PRECEDENZA`, oggi `claude,euristico`).
+precedenza (proprietà di script `PRECEDENZA`, oggi `sage,claude,euristico`).
