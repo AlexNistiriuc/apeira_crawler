@@ -15,7 +15,8 @@ permissions:
   actions: write   # solo per far ripartire il giro successivo
 jobs:
   run:
-    if: vars.SCOUTING_ATTIVO != 'no'
+    # SAGE_ATTIVO = no (Variables del repo) ferma solo Sage; SCOUTING_ATTIVO = no ferma tutto
+    if: vars.SCOUTING_ATTIVO != 'no' && vars.SAGE_ATTIVO != 'no'
     runs-on: ubuntu-latest
     timeout-minutes: 55
     steps:

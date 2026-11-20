@@ -37,8 +37,15 @@ jobs:
       # candidati nuovi: Sage li valuta e il crawler hub fa lo snowball dai loro siti
       - if: always() && steps.crawl.outcome == 'success'
         run: |
-          gh workflow run classify-sage.yml --ref main
           gh workflow run crawl-hubs.yml --ref main
+          gh workflow run classify-sage.yml --ref main || echo "Sage disattivato: salto"
+      # stima età di CEO e CTO delle migliori (Sage o Claude), con Brave e regole: non dipende da Sage
+      - if: always() && steps.crawl.outcome == 'success'
+        run: npm run founders -- 100
+        env:
+          SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
+          SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
+          SEARCH_API_KEY: ${{ secrets.SEARCH_API_KEY }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
