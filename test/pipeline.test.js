@@ -101,7 +101,8 @@ test('pipeline completa', async () => {
   assert.match(v.eta_founder, /24/);
   assert.equal(v.under30, 'sì');
   assert.equal((await classifyQueue(euristico, 100, quiet)).in_coda, 0, 'già valutata');
-  // solo euristico: la vista resta vuota, in Startup trovate si entra solo dopo Sage
+  // con la regola accesa (VISTA_RICHIEDE = sage): solo euristico, la vista resta vuota
+  gas.props.set('VISTA_RICHIEDE', 'sage');
   await gas.backend('views', {});
   assert.equal(gas.sheets.get('Startup trovate').cells.length, 1, 'solo intestazione');
   await upsert('db_valutazioni', 'id', [{ id: 'qubo.ai|sage', dominio: 'qubo.ai', classificatore: 'sage', versione: 'test', valutato_il: '2026-11-19 12:00:00', esito: 'Needs verification', fit: 'Alto', voto: 70, motivo: 'ok' }]);

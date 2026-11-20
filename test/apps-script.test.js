@@ -100,3 +100,21 @@ test('coda per classificatore e vista Startup trovate con note conservate', asyn
   const ev = (await backend('read', { tab: 'db_valutazioni' })).rows.find(x => x.id === 'a.ai|sage');
   assert.equal(ev.nota_alex, 'chiamata fissata');
 });
+
+test('colonna chiave rinominata: errore chiaro, e riparazione con fusione dei doppioni', async () => {
+  const { backend, sheets, ctx } = loadGas();
+  await backend('upsert', { tab: 'db_hub', key: 'hub_id', rows: [{ hub_id: 'a.eu', nome: 'A', stato: 'attivo' }, { hub_id: 'b.eu', nome: 'B', stato: 'attivo' }] });
+  sheets.get('db_hub').cells[0][0] = 'link';            // qualcuno rinomina l'intestazione
+  await assert.rejects(backend('upsert', { tab: 'db_hub', key: 'hub_id', rows: [{ hub_id: 'a.eu', ultimo_crawl: 'x' }] }), /manca la colonna chiave/);
+  // simula lo stato reale: colonna hub_id ricreata in fondo e un doppione aggiunto dallo snowball
+  const sh = sheets.get('db_hub'); const n = sh.cells[0].length;
+  sh.cells[0][n] = 'hub_id'; sh.cells[3] = []; sh.cells[3][1] = 'snowball: b.eu'; sh.cells[3][n] = 'b.eu'; sh.cells[3][9] = '2026-11-19';
+  const r = JSON.parse(JSON.stringify(ctx.riparaHub()));
+  assert.deepEqual([r.prima, r.dopo, r.fusi], [3, 2, 1]);
+  const rows = (await backend('read', { tab: 'db_hub' })).rows;
+  assert.deepEqual(rows.map(x => x.hub_id), ['a.eu', 'b.eu']);
+  assert.equal(rows[1].nome, 'B', 'tiene il nome originale');
+  assert.equal(rows[1].ultimo_crawl, '2026-11-19', 'e prende i dati dal doppione');
+  await backend('upsert', { tab: 'db_hub', key: 'hub_id', rows: [{ hub_id: 'a.eu', ultimo_crawl: 'ok' }] });
+  assert.equal((await backend('read', { tab: 'db_hub' })).rows[0].ultimo_crawl, 'ok', 'gli aggiornamenti tornano a funzionare');
+});

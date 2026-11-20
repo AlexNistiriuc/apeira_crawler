@@ -14,6 +14,7 @@ class Range {
     return this;
   }
   setNumberFormat() { return this; } setFontWeight() { return this; }
+  protect() { return { setDescription() { return this; }, setWarningOnly() { return this; } }; }
 }
 class Sheet {
   constructor(name) { this.name = name; this.cells = []; this.maxRows = 1000; this.maxCols = 26; }
@@ -24,17 +25,18 @@ class Sheet {
   insertRowsAfter(_, n) { this.maxRows += n; } insertColumnsAfter(_, n) { this.maxCols += n; }
   setFrozenRows() {} clearContents() { this.cells = []; }
   hideSheet() { this.hidden = true; return this; } showSheet() { this.hidden = false; return this; }
+  getProtections() { return []; } copyTo(ss) { const c = ss.insertSheet(this.name + '_copia'); c.cells = JSON.parse(JSON.stringify(this.cells)); return c; } setName(n) { this.name = n; return this; } getName() { return this.name; }
 }
 
 export function loadGas() {
   const sheets = new Map(), props = new Map();
   const ss = { getSheetByName: n => sheets.get(n) || null, insertSheet: n => { const s = new Sheet(n); sheets.set(n, s); return s; }, setActiveSheet: s => { if (s.hidden) throw new Error('attivo nascosto'); ss.active = s; } };
   const ctx = {
-    SpreadsheetApp: { getActive: () => ss },
+    SpreadsheetApp: { getActive: () => ss, ProtectionType: { RANGE: 'RANGE' } },
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => props.get(k) ?? null, setProperty: (k, v) => props.set(k, v) }) },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
     ContentService: { createTextOutput: t => ({ t, setMimeType() { return this; } }), MimeType: { JSON: 'json' } },
-    Utilities: { getUuid: () => 'aaaa-bbbb-cccc' },
+    Utilities: { getUuid: () => 'aaaa-bbbb-cccc', formatDate: () => '20261120_0300' },
     ScriptApp: { getProjectTriggers: () => [], newTrigger: () => ({ timeBased: () => ({ everyHours: () => ({ create() {} }) }) }) },
     Logger: { log() {} },
     console,

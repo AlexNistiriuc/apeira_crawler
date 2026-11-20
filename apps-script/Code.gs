@@ -84,7 +84,13 @@ function setup() {
   var view = ss.getSheetByName(VIEW_TAB) || ensureTab_(ss, VIEW_TAB, VIEW_COLUMNS);
   view.showSheet();
   ss.setActiveSheet(view);   // prima la vista attiva, poi si possono nascondere gli altri
-  Object.keys(SCHEMA).forEach(function (name) { ensureTab_(ss, name, SCHEMA[name].columns).hideSheet(); });
+  Object.keys(SCHEMA).forEach(function (name) {
+    var sh = ensureTab_(ss, name, SCHEMA[name].columns);
+    sh.hideSheet();
+    // intestazioni protette: chi prova a modificarle riceve un avviso (i programmi usano i nomi delle colonne)
+    sh.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(function (p) { if (p.getDescription() === 'intestazioni') p.remove(); });
+    sh.getRange(1, 1, 1, sh.getMaxColumns()).protect().setDescription('intestazioni').setWarningOnly(true);
+  });
   OLD_TABS.forEach(function (n) { var sh = ss.getSheetByName(n); if (sh) sh.hideSheet(); });
   var props = PropertiesService.getScriptProperties();
   if (!props.getProperty('API_TOKEN')) props.setProperty('API_TOKEN', Utilities.getUuid().replace(/-/g, ''));
@@ -177,6 +183,9 @@ function upsert_(tab, key, rows) {
   var oldHead = lr ? sh.getRange(1, 1, 1, lc).getValues()[0].map(String) : [];
   var fields = {};
   rows.forEach(function (r) { validate_(tab, r); Object.keys(r).forEach(function (k) { fields[k] = 1; }); });
+  // se la colonna chiave non c'è più (intestazione rinominata a mano), fermarsi: crearne una nuova
+  // vuota farebbe perdere ogni aggiornamento in silenzio (è successo il 19 novembre con db_hub)
+  if (lr > 0 && oldHead.indexOf(key) < 0) throw new Error('Nel tab ' + tab + ' manca la colonna chiave "' + key + '": qualcuno ha rinominato l\'intestazione. Esegui riparaChiave_() o ripristina il nome.');
   var head = ensureColumns_(sh, oldHead, Object.keys(fields));
   var idx = {};
   head.forEach(function (h, i) { idx[h] = i; });
@@ -263,7 +272,7 @@ var VIEW_COLUMNS = [
 
 /**
  * Ricostruisce il tab Startup trovate: una riga per startup non esclusa, con la valutazione del classificatore che ha la precedenza
- * (proprietà PRECEDENZA, default "sage,claude,euristico"). Con VISTA_RICHIEDE (default "sage") entrano solo le startup
+ * (proprietà PRECEDENZA, default "sage,claude,euristico"). Con VISTA_RICHIEDE (es. "sage") entrano solo le startup
  * già valutate da quel classificatore. Gira ogni ora. Le note in colonna "Nota Alex" si conservano.
  */
 /** Stima d'età di CEO e CTO: più "sotto 30" sale, "35 o più" scende. Serve solo a ordinare. */
@@ -283,8 +292,7 @@ function buildViews_() {
   if (order.indexOf('sage') < 0) order.unshift('sage'); // migra automaticamente la vecchia precedenza
   // VISTA_RICHIEDE: in Startup trovate entrano solo le startup valutate da questo classificatore
   // (default "sage": prima l'euristico, poi Sage, poi la vista). Vuoto = qualunque valutatore.
-  var required = props.getProperty('VISTA_RICHIEDE');
-  if (required === null) required = 'sage';
+  var required = props.getProperty('VISTA_RICHIEDE') || '';   // si accende con VISTA_RICHIEDE = sage
   var best = {};
   readRows_('db_valutazioni', null).forEach(function (v) {
     if (required && v.classificatore !== required) return;
@@ -333,3 +341,48 @@ function buildViews_() {
   }
   return { righe: vals.length };
 }
+
+// ---------------------------------------------------------------- manutenzione
+
+/**
+ * Ripara un tab la cui colonna chiave è stata rinominata (es. db_hub: "hub_id" diventato "link").
+ * Copia la chiave dalla colonna rinominata, fonde i doppioni creati nel frattempo, rimette lo schema.
+ * Prima fa una copia di sicurezza nascosta del tab. Da eseguire a mano dall'editor.
+ */
+function riparaChiave_(tab, oldName) {
+  tab = tab || 'db_hub'; oldName = oldName || 'link';
+  var key = SCHEMA[tab].key;
+  var lock = LockService.getScriptLock(); lock.waitLock(120000);
+  try {
+    var ss = SpreadsheetApp.getActive(), sh = ss.getSheetByName(tab);
+    var backup = sh.copyTo(ss).setName(tab + '_backup_' + Utilities.formatDate(new Date(), 'Europe/Rome', 'yyyyMMdd_HHmm'));
+    backup.hideSheet();
+    var lr = sh.getLastRow(), lc = sh.getLastColumn();
+    var all = sh.getRange(1, 1, lr, lc).getValues(), head = all[0].map(String);
+    var li = head.indexOf(oldName), hi = head.lastIndexOf(key);
+    if (li < 0) throw new Error('colonna "' + oldName + '" non trovata in ' + tab);
+    var rows = all.slice(1).map(function (r) {
+      var k = hi >= 0 ? String(r[hi]) : '';
+      r[li] = k || String(r[li]);
+      if (hi >= 0) r.splice(hi, 1);
+      return r;
+    });
+    head[li] = key; if (hi >= 0) head.splice(hi, 1);
+    var byKey = {}, out = [], merged = 0;
+    rows.forEach(function (r) {
+      var k = String(r[li]);
+      if (!k) { out.push(r); return; }
+      if (byKey[k] === undefined) { byKey[k] = out.length; out.push(r); return; }
+      var t = out[byKey[k]]; merged++;
+      for (var c = 0; c < head.length; c++) if (!String(t[c]) && String(r[c])) t[c] = r[c];
+    });
+    sh.clearContents();
+    sh.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight('bold');
+    if (out.length) sh.getRange(2, 1, out.length, head.length).setNumberFormat('@').setValues(out);
+    Logger.log(tab + ': righe prima ' + rows.length + ', dopo ' + out.length + ', doppioni fusi ' + merged + ', copia di sicurezza ' + backup.getName());
+    return { prima: rows.length, dopo: out.length, fusi: merged, backup: backup.getName() };
+  } finally { lock.releaseLock(); }
+}
+
+/** Da eseguire dall'editor: ripara db_hub. */
+function riparaHub() { return riparaChiave_('db_hub', 'link'); }
