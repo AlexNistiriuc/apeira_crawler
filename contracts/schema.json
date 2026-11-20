@@ -51,7 +51,10 @@
         "evidenze",
         "pagine_lette",
         "versione_crawler",
-        "snowball_il"
+        "snowball_il",
+        "eta_stimata",
+        "fonti_eta",
+        "eta_il"
       ]
     },
     "db_valutazioni": {

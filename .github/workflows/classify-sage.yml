@@ -29,15 +29,16 @@ jobs:
           SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
           SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
           SAGE_API_KEY: ${{ secrets.SAGE_API_KEY }}
+          SEARCH_API_KEY: ${{ secrets.SEARCH_API_KEY }}   # notizie di funding cercate dal crawler (facoltativo)
           RUN_MINUTES: 40
           REFRESH_VIEW: '1'
-      # stima età di CEO e CTO per le 100 migliori (solo quelle non ancora stimate: dopo il primo giro costa pochissimo)
+      # stima età di CEO e CTO delle 100 migliori: crawler con ricerca web Brave e regole, niente Sage
       - if: steps.sage.outcome == 'success'
-        run: npm run eta -- 100
+        run: npm run founders -- 100
         env:
           SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
           SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
-          SAGE_API_KEY: ${{ secrets.SAGE_API_KEY }}
+          SEARCH_API_KEY: ${{ secrets.SEARCH_API_KEY }}
       # catena: se in coda resta lavoro, riparte subito. Si ferma da sola con coda vuota o con un errore
       # (per esempio credito Sage finito), così non si sprecano né minuti né crediti.
       - if: steps.sage.outcome == 'success' && steps.sage.outputs.altro_lavoro == 'true'

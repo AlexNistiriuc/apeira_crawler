@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 
+process.env.SAGE_READ_SITE = '0';   // i test di Sage non rileggono siti veri
 const sage = (await import('../src/classifiers/sage.js')).default;
 const originalFetch = globalThis.fetch;
 const originalKey = process.env.SAGE_API_KEY;
@@ -65,7 +66,8 @@ const candidate = {
   },
 };
 
-test('Sage ricerca la società, filtra le fonti e poi decide in batch', async () => {
+test('con la ricerca web di Sage accesa: ricerca, filtra le fonti e poi decide in batch', async () => {
+  process.env.SAGE_GROUNDING_TRIGGER = 'always';
   responseBody = sageResponse('qualified', 0.94, 'high', 91.6);
   const result = await sage.classify(candidate);
   assert.equal(result.esito, 'Qualificata');
@@ -87,6 +89,7 @@ test('Sage ricerca la società, filtra le fonti e poi decide in batch', async ()
   assert.match(result.fonti, /https:\/\/example\.com\/qubo-funding/);
   assert.doesNotMatch(result.fonti, /irrelevant\.example/);
   assert.doesNotMatch(requestBody.requests[0].content, /founder@qubo\.ai/);
+  delete process.env.SAGE_GROUNDING_TRIGGER;
 });
 
 test('una qualifica Sage incerta viene declassata a Needs verification', async () => {
@@ -125,8 +128,8 @@ test('Fit Basso ma Sage vede qualcosa di buono: si rifà in modalità completa',
   globalThis.fetch = async (url, options) => { calls.push([url, JSON.parse(options.body).reasoning]); return orig(url, options); };
   responseBody = sageResponse('needs_verification', 0.8, 'high', 72);
   const result = await sage.classify(weak);
-  assert.deepEqual(calls.map(c => c[0].split('/').pop()), ['batch', 'decide', 'batch']);
-  assert.equal(calls[2][1], 'on');
+  assert.deepEqual(calls.map(c => c[0].split('/').pop()), ['batch', 'batch'], 'senza ricerca web di Sage');
+  assert.equal(calls[1][1], 'on');
   assert.match(result.versione, /completo/);
 });
 
@@ -174,4 +177,11 @@ test('Needs verification non supera 84 di voto', async () => {
   const r = await sage.classify({ ...candidate, ev: { ...candidate.ev, fa: { a: [] } } });
   assert.equal(r.esito, 'Needs verification');
   assert.equal(r.voto, 84);
+});
+
+test('di default Sage non fa ricerche web (la parte più cara)', async () => {
+  responseBody = sageResponse('needs_verification', 0.8, 'high', 70);
+  await sage.classify(candidate);
+  assert.equal(researchBody, null);
+  assert.equal(requestBody.requests[0].questions.some(q => q.grounding), false);
 });

@@ -9,6 +9,10 @@
 //    di buono (fit alto, voto >= 60, o qualificata) si rifà subito in modalità completa.
 // Le escluse dall'euristico non arrivano mai a Sage (zero crediti).
 // I consumi di ogni giro finiscono in db_log (statistiche.consumo).
+import { getPage } from '../lib/http.js';
+import { links, host, reg } from '../lib/url.js';
+import { extract } from '../crawlers/startups/row.js';
+import { webSearch, searchEnabled, searchStats } from '../lib/search.js';
 import { CRITERIA as C } from '../lib/config.js';
 import euristico from './euristico.js';
 
@@ -71,7 +75,7 @@ export function trim(value, max) {
   return s.length > max ? s.slice(0, max) : s;
 }
 
-function candidateContent(c, baseline, webResearch = []) {
+function candidateContent(c, baseline, webResearch = [], site = null) {
   const ev = c.ev || {};
   const policy = {
     founded: `${C.min_founded_year}-${C.max_founded_year}`,
@@ -100,7 +104,8 @@ function candidateContent(c, baseline, webResearch = []) {
     demand: { summary: trim(c.domanda_reale, 1000), evidence: ev.dem },
     public_contact_available: Boolean(c.email || c.linkedin_persone),
     deep_tech: { score: ev.deep, negative_score: ev.neg, strong_signals: ev.strong, tags: ev.tags },
-    page_extracts: { home: trim(ev.estratto_home, 3000), team: trim(ev.estratto_team, 2000) },
+    page_extracts: site && site.length ? site : { home: trim(ev.estratto_home, 3000), team: trim(ev.estratto_team, 2000) },
+    founder_age_estimate_from_crawler: c.eta_stimata || 'not estimated',
     deterministic_check: baseline,
     web_research: webResearch,
     sources: trim(c.pagine_lette || c.sito, 1500),
@@ -122,7 +127,7 @@ function candidateContent(c, baseline, webResearch = []) {
   });
 }
 
-const usage = { chiamate: 0, input_tokens: 0, output_tokens: 0, ricerche_web: 0, completi: 0, leggeri: 0, promossi: 0, saltati_esclusi: 0 };
+const usage = { chiamate: 0, input_tokens: 0, output_tokens: 0, ricerche_web: 0, completi: 0, leggeri: 0, promossi: 0, saltati_esclusi: 0, pagine_sito: 0 };
 function track(body, grounded) {
   usage.chiamate++;
   const u = body?.meta?.usage || body?.usage || {};
@@ -138,7 +143,9 @@ function reasoningMode() {
 }
 
 function grounding() {
-  const trigger = process.env.SAGE_GROUNDING_TRIGGER || 'always';
+  // ricerca web di Sage spenta di default: la parte più cara. Al suo posto: il sito riletto al momento
+  // (gratis) e le notizie di funding cercate dal crawler con Brave (circa 0,005 $ a ricerca).
+  const trigger = process.env.SAGE_GROUNDING_TRIGGER || 'never';
   if (!GROUNDING_TRIGGERS.has(trigger)) throw new Error(`SAGE_GROUNDING_TRIGGER non valido: ${trigger}`);
   const confidenceFloor = Number(process.env.SAGE_GROUNDING_CONFIDENCE_FLOOR || 0.85);
   if (!Number.isFinite(confidenceFloor) || confidenceFloor < 0 || confidenceFloor > 1) {
@@ -312,10 +319,44 @@ function safeScore(expectation, esito) {
 
 const NO_RESEARCH = { evidence: [], sources: [] };
 
-async function decideOnce(c, baseline, full) {
-  const research = full ? await sageResearch(c) : NO_RESEARCH;
-  const response = answerMap(await sageBatch(candidateContent(c, baseline, research.evidence), c, full ? reasoningMode() : 'off'));
-  return { research, response };
+async function decideOnce(c, baseline, full, site) {
+  const research = full && grounding().trigger !== 'never' ? await sageResearch(c) : NO_RESEARCH;
+  const press = full ? await pressSearch(c) : [];
+  const evidence = [...research.evidence, ...press];
+  const response = answerMap(await sageBatch(candidateContent(c, baseline, evidence, site), c, full ? reasoningMode() : 'off'));
+  return { research: { evidence, sources: [...research.sources, ...press.map(p => p.url)] }, response };
+}
+
+// ---- contenuti dati a Sage senza pagare la sua ricerca web ----
+
+const SITE_PAGES = /(team|about|chi-siamo|ueber|über|founders|people|company|news|press|presse|media|blog|story|mission)/i;
+const SITE_MAX_CHARS = Number(process.env.SAGE_SITE_CHARS || 20000);
+
+/** Rilegge il sito della startup al momento (home + fino a 3 pagine utili), solo in memoria: non si salva niente. */
+export async function readSite(c) {
+  if (process.env.SAGE_READ_SITE === '0' || !c.sito) return null;
+  const home = await getPage(c.sito, { maxJinaBacklog: 4 });
+  if (home.status !== 200 || !home.text) return null;
+  const dom = String(c.dominio || '').toLowerCase();
+  const urls = [...new Set(links(home.text).map(([tx, l]) => [tx, l]).filter(([tx, l]) => { const h = host(l); return h && reg(h) === dom && SITE_PAGES.test(l.replace(/^https?:\/\/[^/]+/, '') + ' ' + tx); }).map(([, l]) => l.replace(/#.*$/, '')))].slice(0, 3);
+  const pages = [{ url: c.sito, text: extract(home.text, 8000) }];
+  for (const u of urls) {
+    const r = await getPage(u, { jinaFallback: false });
+    if (r.status === 200 && r.text) pages.push({ url: u, text: extract(r.text, 6000) });
+  }
+  let total = 0;
+  usage.pagine_sito += pages.length;
+  return pages.filter(p => (total += p.text.length) <= SITE_MAX_CHARS);
+}
+
+/** Notizie di funding e premi: una ricerca Brave del crawler, filtrata sul dominio o sul nome. */
+async function pressSearch(c) {
+  if (!searchEnabled()) return [];
+  const name = c.nome || c.dominio;
+  const res = await webSearch(`"${name}" funding OR raises OR "pre-seed" OR seed OR grant OR award`);
+  const dom = String(c.dominio || '').toLowerCase(), nm = String(name).toLowerCase();
+  return res.filter(x => { const h = `${x.url} ${x.title} ${x.snippet}`.toLowerCase(); return h.includes(dom) || (nm.length > 4 && h.includes(nm)); })
+    .slice(0, 6).map(x => ({ title: trim(x.title, 200), url: x.url, snippet: trim(x.snippet, 1200) }));
 }
 
 function wantsFull(baseline) {
@@ -329,11 +370,11 @@ function promising(sage) {
 
 export default {
   name: 'sage',
-  version: 'sage-2-v8',
+  version: 'sage-3',
   rankBy: 'euristico',
   parallel: Number(process.env.SAGE_PARALLEL || 3),
   writeEvery: 10,
-  stats: () => ({ ...usage }),
+  stats: () => ({ ...usage, ricerche_brave: searchStats.ricerche }),
 
   async classify(c) {
     const baseline = await euristico.classify(c);
@@ -341,13 +382,14 @@ export default {
     if (baseline.esito === 'Esclusa') { usage.saltati_esclusi++; return { ...baseline, versione: this.version + ' (solo euristico)' }; }
 
     let full = wantsFull(baseline);
-    let { research, response } = await decideOnce(c, baseline, full);
+    const site = await readSite(c);   // una lettura sola anche se si passa al livello completo
+    let { research, response } = await decideOnce(c, baseline, full, site);
     if (!full) {
       usage.leggeri++;
       if (promising(response.decisions)) {
         usage.promossi++;
         full = true;
-        ({ research, response } = await decideOnce(c, baseline, true));
+        ({ research, response } = await decideOnce(c, baseline, true, site));
       }
     }
     if (full) usage.completi++;
