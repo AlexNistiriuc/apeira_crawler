@@ -94,6 +94,20 @@
         "fine",
         "statistiche"
       ]
+    },
+    "db_scoperta": {
+      "key": "query",
+      "owner": "scoperta hub (src/crawlers/discovery)",
+      "columns": [
+        "query",
+        "tipo",
+        "settore",
+        "luogo",
+        "usata_il",
+        "risultati",
+        "hub_nuovi",
+        "hub_utili"
+      ]
     }
   },
   "enums": {

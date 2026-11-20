@@ -12,7 +12,8 @@
     "startups": "node src/crawlers/startups/index.js",
     "classify": "node src/classifiers/run.js",
     "test": "node --test test/*.test.js",
-    "founders": "node src/crawlers/founders/index.js"
+    "founders": "node src/crawlers/founders/index.js",
+    "discovery": "node src/crawlers/discovery/index.js"
   },
   "dependencies": {
     "cheerio": "1.0.0"
