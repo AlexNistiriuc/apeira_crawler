@@ -52,7 +52,7 @@ function handle_(p, readOnly) {
     if (readOnly && ['read', 'queue', 'ping'].indexOf(a) < 0) return { ok: false, error: 'via GET solo read, queue, ping' };
     if (a === 'ping') return { ok: true, ora: new Date().toISOString() };
     if (a === 'read') return { ok: true, rows: readRows_(p.tab, asList_(p.columns), p.where) };
-    if (a === 'queue') return { ok: true, rows: queue_(p.classifier, Number(p.limit || 200), p.rank_by) };
+    if (a === 'queue') return { ok: true, rows: queue_(p.classifier, Number(p.limit || 200), p.rank_by, p.solo_nuove) };
     if (a === 'upsert') return withLock_(function () { return upsert_(p.tab, p.key, p.rows || []); });
     if (a === 'append') return withLock_(function () { return append_(p.tab, p.rows || []); });
     if (a === 'views') return withLock_(function () { return buildViews_(); });
@@ -252,8 +252,9 @@ function append_(tab, rows) {
  * Candidati da_valutare senza valutazione di quel classificatore, o valutati prima dell'ultimo controllo.
  * rank_by (facoltativo): nome di un altro classificatore. Mette prima i candidati con il suo voto più alto,
  * salta quelli che lui ha escluso e aggiunge a ogni riga il suo giudizio (pre_esito, pre_fit, pre_voto, pre_motivo).
+ * solo_nuove (facoltativo): esclude le startup importate dalla v1 (versione_crawler "1 (migrata)").
  */
-function queue_(classifier, limit, rankBy) {
+function queue_(classifier, limit, rankBy, onlyNew) {
   if (!classifier) throw new Error('serve classifier');
   var done = {}, pre = {};
   readRows_('db_valutazioni', ['dominio', 'classificatore', 'valutato_il', 'esito', 'fit', 'voto', 'motivo']).forEach(function (v) {
@@ -261,6 +262,8 @@ function queue_(classifier, limit, rankBy) {
     if (rankBy && v.classificatore === rankBy) pre[v.dominio] = v;
   });
   var rows = readRows_('db_candidati', null, { stato_crawler: 'da_valutare' }).filter(function (c) {
+    // solo_nuove: solo le startup trovate dal crawler v2, non quelle importate dalla v1
+    if (onlyNew && onlyNew !== 'false' && String(c.versione_crawler).indexOf('migrata') >= 0) return false;
     if (rankBy && pre[c.dominio] && pre[c.dominio].esito === 'Esclusa') return false;
     return done[c.dominio] === undefined || String(done[c.dominio]) < String(c.ultimo_check);
   });

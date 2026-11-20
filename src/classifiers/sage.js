@@ -373,6 +373,9 @@ export default {
   name: 'sage',
   version: 'sage-3',
   rankBy: 'euristico',
+  // solo le startup trovate dal crawler v2; le 1.600 importate dalla v1 restano all'euristico.
+  // Per includerle anche loro: variabile SAGE_SOLO_NUOVE = 0 nel workflow.
+  onlyNew: process.env.SAGE_SOLO_NUOVE !== '0',
   parallel: Number(process.env.SAGE_PARALLEL || 3),
   writeEvery: 10,
   stats: () => ({ ...usage, ricerche_brave: searchStats.ricerche }),

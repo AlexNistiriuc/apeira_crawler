@@ -51,8 +51,8 @@ export async function append(tab, rows) { return call('append', { tab, rows }); 
 export async function views() { return call('views', {}); }
 
 /** Candidati che un classificatore non ha ancora valutato (o valutato prima dell'ultimo controllo). */
-export async function queue(classifier, limit = 200, rank_by) {
-  return (await call('queue', { classifier, limit, rank_by })).rows || [];
+export async function queue(classifier, limit = 200, rank_by, solo_nuove = false) {
+  return (await call('queue', { classifier, limit, rank_by, solo_nuove })).rows || [];
 }
 
 /** Scrive una riga nel tab di log a fine run. */

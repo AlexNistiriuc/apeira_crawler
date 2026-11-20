@@ -130,3 +130,13 @@ test('molti aggiornamenti insieme: scrittura in blocco, solo i campi passati', a
   assert.equal(all[1].hub_origine, 'H'); assert.equal(all[1].nome, 'S1');
   assert.equal(all[2].hub_origine, ''); assert.equal(all[2].nome, 'S2', 'le righe non toccate restano uguali');
 });
+
+test('coda solo_nuove: esclude le startup importate dalla v1', async () => {
+  const { backend } = loadGas();
+  await backend('upsert', { tab: 'db_candidati', key: 'dominio', rows: [
+    { dominio: 'vecchia.ai', stato_crawler: 'da_valutare', versione_crawler: '1 (migrata)', ultimo_check: '2026-11-17 10:00:00' },
+    { dominio: 'nuova.ai', stato_crawler: 'da_valutare', versione_crawler: '2.0.0', ultimo_check: '2026-11-20 10:00:00' },
+  ] });
+  assert.deepEqual((await backend('queue', { classifier: 'sage', limit: 10, solo_nuove: true })).rows.map(r => r.dominio), ['nuova.ai']);
+  assert.equal((await backend('queue', { classifier: 'sage', limit: 10 })).rows.length, 2, 'senza opzione: tutte');
+});

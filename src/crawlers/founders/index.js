@@ -20,10 +20,10 @@ export function ceoCto(founders) {
   return out;
 }
 
-/** Le migliori: valutate da Sage (se no, dall'euristico), non escluse, per fit e voto. */
+/** Le migliori secondo Sage (quindi startup nuove), non escluse, per fit e voto. */
 export function pickBest(evals, n) {
   const by = {};
-  for (const v of evals) if (v.esito !== 'Esclusa' && (v.classificatore === 'sage' || (v.classificatore === 'euristico' && !by[v.dominio]))) by[v.dominio] = v;
+  for (const v of evals) if (v.esito !== 'Esclusa' && v.classificatore === 'sage') by[v.dominio] = v;
   return Object.values(by).sort((a, b) => (FIT[a.fit] ?? 3) - (FIT[b.fit] ?? 3) || Number(b.voto) - Number(a.voto)).slice(0, n);
 }
 
