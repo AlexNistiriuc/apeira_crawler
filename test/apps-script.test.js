@@ -118,3 +118,15 @@ test('colonna chiave rinominata: errore chiaro, e riparazione con fusione dei do
   await backend('upsert', { tab: 'db_hub', key: 'hub_id', rows: [{ hub_id: 'a.eu', ultimo_crawl: 'ok' }] });
   assert.equal((await backend('read', { tab: 'db_hub' })).rows[0].ultimo_crawl, 'ok', 'gli aggiornamenti tornano a funzionare');
 });
+
+test('molti aggiornamenti insieme: scrittura in blocco, solo i campi passati', async () => {
+  const { backend } = loadGas();
+  const rows = Array.from({ length: 120 }, (_, i) => ({ dominio: `s${i}.ai`, nome: `S${i}`, stato_crawler: 'da_valutare' }));
+  await backend('upsert', { tab: 'db_candidati', key: 'dominio', rows });
+  const r = await backend('upsert', { tab: 'db_candidati', key: 'dominio', rows: rows.filter((_, i) => i % 2).map(x => ({ dominio: x.dominio, hub_origine: 'H' })) });
+  assert.equal(r.updated, 60);
+  const all = (await backend('read', { tab: 'db_candidati' })).rows;
+  assert.equal(all.length, 120);
+  assert.equal(all[1].hub_origine, 'H'); assert.equal(all[1].nome, 'S1');
+  assert.equal(all[2].hub_origine, ''); assert.equal(all[2].nome, 'S2', 'le righe non toccate restano uguali');
+});

@@ -208,13 +208,28 @@ function upsert_(tab, key, rows) {
       inserts.push(fresh[k]);
     }
   });
-  // aggiornamenti: si legge e riscrive solo la riga toccata, cambiando solo i campi passati
-  Object.keys(updates).forEach(function (r) {
-    var rng = sh.getRange(Number(r) + 2, 1, 1, head.length);
-    var cur = rng.getValues()[0];
+  // aggiornamenti: cambiano solo i campi passati. Pochi: riga per riga. Tanti (es. migliaia di hub_origine
+  // a fine giro del crawler): un'unica lettura e un'unica scrittura del blocco di righe toccate, perché
+  // ogni chiamata a Sheets costa e riga per riga migliaia di aggiornamenti richiedevano decine di minuti.
+  var touched = Object.keys(updates).map(Number);
+  var apply = function (cur, r) {
+    while (cur.length < head.length) cur.push('');
     updates[r].forEach(function (row) { Object.keys(row).forEach(function (f) { cur[idx[f]] = cell_(row[f]); }); });
-    rng.setValues([cur]);
-  });
+  };
+  if (touched.length > 50) {
+    var minR = Math.min.apply(null, touched), maxR = Math.max.apply(null, touched);
+    var block = sh.getRange(minR + 2, 1, maxR - minR + 1, head.length);
+    var vals = block.getValues();
+    touched.forEach(function (r) { apply(vals[r - minR], r); });
+    block.setValues(vals);
+  } else {
+    touched.forEach(function (r) {
+      var rng = sh.getRange(r + 2, 1, 1, head.length);
+      var cur = rng.getValues()[0];
+      apply(cur, r);
+      rng.setValues([cur]);
+    });
+  }
   if (inserts.length) {
     var start = sh.getLastRow() + 1;
     if (sh.getMaxRows() < start + inserts.length) sh.insertRowsAfter(sh.getMaxRows(), start + inserts.length - sh.getMaxRows());

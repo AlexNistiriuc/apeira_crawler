@@ -12,7 +12,7 @@ jobs:
   run:
     if: vars.SCOUTING_ATTIVO != 'no'
     runs-on: ubuntu-latest
-    timeout-minutes: 70
+    timeout-minutes: 90   # 45 di lavoro + chiusura (scritture finali e statistiche); se scade, la catena si interrompe
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
