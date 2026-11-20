@@ -34,3 +34,21 @@ test('crawler founder: solo CEO e CTO, una ricerca per persona, una volta sola',
   assert.match(c.eta_stimata, /CTO Marco Bianchi: non determinabile/);
   assert.equal((await run(10, () => {})).candidate, 0, 'già stimata');
 });
+
+test('tetto mensile Brave: contato da db_log, oltre il tetto niente ricerche', async () => {
+  const { monthlyUsed, setMonthlyUsed, webSearch, setSearchFetch, searchStats } = await import('../src/lib/search.js');
+  const m = new Date().toISOString().slice(0, 7);
+  assert.equal(monthlyUsed([
+    { inizio: `${m}-02 10:00:00`, statistiche: JSON.stringify({ ricerche_brave: 400 }) },
+    { inizio: `${m}-03 10:00:00`, statistiche: JSON.stringify({ ricerche_brave: 500 }) },
+    { inizio: '2000-01-01 10:00:00', statistiche: JSON.stringify({ ricerche_brave: 999 }) },
+  ]), 900);
+  process.env.SEARCH_API_KEY = 'k';
+  let calls = 0; setSearchFetch(async () => { calls++; return Response.json({ web: { results: [] } }); });
+  setMonthlyUsed(10000);
+  const before = searchStats.saltate_tetto;
+  assert.deepEqual(await webSearch('x'), []);
+  assert.equal(calls, 0, 'nessuna chiamata pagata oltre il tetto');
+  assert.equal(searchStats.saltate_tetto, before + 1);
+  setMonthlyUsed(0);
+});

@@ -7,9 +7,25 @@ import { sleep } from './http.js';
 const ENDPOINT = process.env.SEARCH_ENDPOINT || 'https://api.search.brave.com/res/v1/web/search';
 const GAP_MS = Number(process.env.SEARCH_GAP_MS || 1100);
 const MAX_PER_RUN = Number(process.env.SEARCH_MAX_PER_RUN || 400);
+// Tetto mensile: il credito gratuito Brave copre circa 1.000 ricerche al mese. Superato il tetto si
+// smette di cercare fino al mese dopo (Sage lavora col solo sito). Il conteggio viene da db_log.
+const MONTH_CAP = Number(process.env.SEARCH_MONTH_CAP || 950);
+let usedThisMonth = 0;
+
+/** Somma le ricerche Brave del mese corrente registrate in db_log (campo ricerche_brave di ogni giro). */
+export function monthlyUsed(logRows, month = new Date().toISOString().slice(0, 7)) {
+  let n = 0;
+  for (const r of logRows) {
+    if (!String(r.inizio || '').startsWith(month)) continue;
+    try { n += Number(JSON.parse(r.statistiche || '{}').ricerche_brave) || 0; } catch {}
+  }
+  return n;
+}
+/** Da chiamare a inizio giro con le righe di db_log. */
+export function setMonthlyUsed(n) { usedThisMonth = n; searchStats.gia_usate_nel_mese = n; }
 
 let chain = Promise.resolve(), last = 0;
-export const searchStats = { ricerche: 0, errori: 0, saltate_tetto: 0 };
+export const searchStats = { ricerche: 0, errori: 0, saltate_tetto: 0, gia_usate_nel_mese: 0 };
 let impl = (...a) => fetch(...a);
 /** Solo per i test. */
 export function setSearchFetch(fn) { impl = fn; }
@@ -20,7 +36,7 @@ export const searchEnabled = () => Boolean(process.env.SEARCH_API_KEY);
 export async function webSearch(q, { count = 8 } = {}) {
   const key = process.env.SEARCH_API_KEY;
   if (!key) return [];
-  if (searchStats.ricerche >= MAX_PER_RUN) { searchStats.saltate_tetto++; return []; }
+  if (searchStats.ricerche >= MAX_PER_RUN || usedThisMonth + searchStats.ricerche >= MONTH_CAP) { searchStats.saltate_tetto++; return []; }
   const slot = chain.then(async () => { const w = last + GAP_MS - Date.now(); if (w > 0) await sleep(w); last = Date.now(); });
   chain = slot.catch(() => {});
   await slot;

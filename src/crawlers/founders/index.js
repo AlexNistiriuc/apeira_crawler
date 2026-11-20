@@ -5,7 +5,7 @@
 // Uso: npm run founders -- [quante]   (default 100)
 import { read, upsert, logRun, TABS } from '../../lib/sheet.js';
 import { now, today } from '../../lib/config.js';
-import { webSearch, searchEnabled, searchStats } from '../../lib/search.js';
+import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed } from '../../lib/search.js';
 import { estimateAge } from '../../signals/age.estimate.js';
 
 const FIT = { Alto: 0, Medio: 1, Basso: 2 };
@@ -31,6 +31,7 @@ export async function run(n = 100, log = console.log) {
   const startedAt = now();
   const st = { candidate: 0, persone: 0, stimate: 0, senza_nomi: 0 };
   if (!searchEnabled()) { log('SEARCH_API_KEY mancante: stima età saltata'); st.saltato = 'manca SEARCH_API_KEY'; await logRun('crawler founder', startedAt, st); return st; }
+  setMonthlyUsed(monthlyUsed(await read(TABS.log, { columns: ['inizio', 'statistiche'] })));
   const cands = new Map((await read(TABS.cand, { columns: ['dominio', 'nome', 'founder_nomi', 'eta_il'] })).map(c => [c.dominio, c]));
   const best = pickBest(await read(TABS.eval, { columns: ['dominio', 'classificatore', 'esito', 'fit', 'voto'] }), n)
     .map(v => cands.get(v.dominio)).filter(c => c && !c.eta_il);
@@ -53,6 +54,7 @@ export async function run(n = 100, log = console.log) {
   }
   if (out.length) await upsert(TABS.cand, 'dominio', out);
   st.ricerche = { ...searchStats };
+  st.ricerche_brave = searchStats.ricerche;
   await logRun('crawler founder', startedAt, st);
   log(JSON.stringify(st));
   return st;

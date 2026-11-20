@@ -16,6 +16,7 @@ import { validateEvaluation } from './contract.js';
 
 export async function classifyQueue(clf, limit = 500, log = console.log, { deadline = Infinity, refreshView = false } = {}) {
   const startedAt = now();
+  if (clf.init) await clf.init();
   const rows = await queue(clf.name, limit, clf.rankBy);
   const out = writer(TABS.eval, 'id', clf.writeEvery || 200);
   const st = { classificatore: clf.name, in_coda: rows.length, scritte: 0, non_valide: 0, errori: 0, saltate_per_tempo: 0, esiti: {}, fit: {} };
@@ -47,7 +48,7 @@ export async function classifyQueue(clf, limit = 500, log = console.log, { deadl
   await out.flush();
 
   if (fatal) st.fermato_per = fatal;
-  if (clf.stats) st.consumo = clf.stats();
+  if (clf.stats) { st.consumo = clf.stats(); if (st.consumo.ricerche_brave != null) st.ricerche_brave = st.consumo.ricerche_brave; }
   // altro lavoro: la coda era piena fino al limite, o è rimasto qualcosa per tempo o errori
   st.altro_lavoro = !fatal && (rows.length >= limit || st.saltate_per_tempo > 0);
   if (refreshView && st.scritte) { try { await views(); } catch (err) { log('vista non aggiornata: ' + err.message); } }

@@ -12,7 +12,8 @@
 import { getPage } from '../lib/http.js';
 import { links, host, reg } from '../lib/url.js';
 import { extract } from '../crawlers/startups/row.js';
-import { webSearch, searchEnabled, searchStats } from '../lib/search.js';
+import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed } from '../lib/search.js';
+import { read, TABS } from '../lib/sheet.js';
 import { CRITERIA as C } from '../lib/config.js';
 import euristico from './euristico.js';
 
@@ -375,6 +376,8 @@ export default {
   parallel: Number(process.env.SAGE_PARALLEL || 3),
   writeEvery: 10,
   stats: () => ({ ...usage, ricerche_brave: searchStats.ricerche }),
+  /** A inizio giro: quante ricerche Brave sono già state usate nel mese. */
+  async init() { if (searchEnabled()) setMonthlyUsed(monthlyUsed(await read(TABS.log, { columns: ['inizio', 'statistiche'] }))); },
 
   async classify(c) {
     const baseline = await euristico.classify(c);
