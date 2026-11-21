@@ -43,10 +43,32 @@ export function registryFounders(reg, founders) {
 
 // ---------------------------------------------------------------- fase: notizie di funding
 
+/**
+ * Nome con cui cercare e riconoscere la startup. Il crawler a volte salva come nome una parola generica
+ * del sito ("startup", "home"): se il nome non somiglia al dominio, si usa il dominio senza estensione.
+ */
+export function companyName(c) {
+  const stem = fold(String(c.dominio || '').split('.')[0]).replace(/[^a-z0-9]/g, '');
+  const nm = String(c.nome || '').trim(), compact = fold(nm).replace(/[^a-z0-9]/g, '');
+  const first = fold(nm).split(/[^a-z0-9]+/).filter(Boolean)[0] || '';
+  if (compact && stem && (stem.includes(compact) || compact.includes(stem) || (first.length >= 3 && stem.includes(first)))) return nm;
+  return stem || nm || String(c.dominio || '');
+}
+
+/**
+ * Round oltre soglia confermato: il risultato contiene il dominio, oppure almeno due risultati diversi
+ * riportano importi simili (entro il 30%). Un solo risultato su un nome che può avere omonimi non basta.
+ */
+export function confirmedOver(items, threshold) {
+  const big = items.filter(x => x.usd > threshold);
+  return big.some(x => x.dom) || big.some(a => big.some(b => b.n !== a.n && Math.abs(a.usd - b.usd) <= 0.3 * Math.max(a.usd, b.usd)));
+}
+
 const FX = C.fx_to_usd || {};
 const AMOUNT = /(?:(€|eur|euros?|\$|usd|£|gbp|chf)\s?(\d+(?:[.,]\d+)?)\s?(k|m|mn|million|millions|mio|bn|billion)?\b|(\d+(?:[.,]\d+)?)\s?(k|m|mn|million|millions|mio|bn|billion)?\s?(€|eur|euros?|usd|dollars|£|gbp|chf)\b)/gi;
 const RAISE = /\b(rais(es|ed|ing)|secur(es|ed)|clos(es|ed)|lands?|landed|bags?|bagged|completes?|completed|announces?|announced|funding|financing|investment|round|backed)\b/i;
 const GRANT = /\b(grant|grants|award(ed)?|prize|eic|horizon europe|exist|innosuisse|bpifrance|i-lab|i-nov|innovate uk|sbir|non-dilutive|subsid)/i;
+const FUND_ITSELF = /\b(fund|fonds|fondo)\b/i;   // "X Ventures raises $50M fund": è un fondo, non la startup
 const STAGE = [[/\bseries [a-d]\b/i, 'series'], [/(?<!pre-?)\bseed (round|funding|investment|financing)\b/i, 'seed'], [/\bpre-?seed\b/i, 'pre-seed']];
 
 /**
@@ -57,13 +79,15 @@ export function newsFunding(news, name, domain) {
   const out = { investimenti: [], grant: [], fase: '', inv_usd: 0, grant_usd: 0 };
   const nm = fold(name), dom = fold(domain), stem = dom.split('.')[0];
   const mentions = s => (nm.length >= 4 && s.includes(nm)) || (dom && s.includes(dom)) || (stem.length >= 5 && s.includes(stem));
-  for (const n of news || []) {
+  for (const [ni, n] of (news || []).entries()) {
+    const hasDom = Boolean(dom) && fold(`${n.url || ''} ${n.title || ''} ${n.snippet || ''}`).includes(dom);
     for (const sent of String(`${n.title || ''}. ${n.snippet || ''}`).split(/(?<=[.!?])\s+|\s…\s/)) {
       const f = fold(sent);
       if (!mentions(f)) continue;
       for (const [re, k] of STAGE) if (re.test(sent) && (!out.fase || k === 'series' || (k === 'seed' && out.fase === 'pre-seed'))) out.fase = k;
       const isGrant = GRANT.test(sent);
       if (!isGrant && !RAISE.test(sent)) continue;
+      if (FUND_ITSELF.test(sent)) continue;
       AMOUNT.lastIndex = 0;
       let m;
       while ((m = AMOUNT.exec(sent))) {
@@ -72,12 +96,14 @@ export function newsFunding(news, name, domain) {
         const amt = parseFloat(String(m[2] || m[4]).replace(',', '.')) * mult;
         if (!(amt >= 10000) || amt > 5e9) continue;
         const usd = Math.round(amt * (FX[cur] || 1));
-        const it = { importo: `${cur.toUpperCase()} ${amt >= 1e6 ? (amt / 1e6).toFixed(1) + 'M' : Math.round(amt / 1e3) + 'k'}`, usd, url: n.url, frase: sent.trim().slice(0, 200) };
+        const it = { importo: `${cur.toUpperCase()} ${amt >= 1e6 ? (amt / 1e6).toFixed(1) + 'M' : Math.round(amt / 1e3) + 'k'}`, usd, url: n.url, frase: sent.trim().slice(0, 200), n: ni, dom: hasDom };
         (isGrant ? out.grant : out.investimenti).push(it);
       }
     }
   }
   out.inv_usd = Math.max(0, ...out.investimenti.map(x => x.usd));
-  out.grant_usd = out.grant.reduce((s, x) => s + x.usd, 0);
+  // stessi importi ripetuti in più frasi o pagine: contano una volta sola
+  out.grant_usd = [...new Set(out.grant.map(x => x.usd))].reduce((s, x) => s + x, 0);
+  out.top_inv = out.investimenti.reduce((a, b) => (b.usd > (a?.usd || 0) ? b : a), null);
   return out;
 }

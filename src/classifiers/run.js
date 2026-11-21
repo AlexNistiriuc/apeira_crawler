@@ -10,14 +10,17 @@
 //  - scadenza RUN_MINUTES: smette di prendere candidati nuovi e salva;
 //  - a fine giro dice se in coda ne restano (per far ripartire la catena) e aggiorna la vista.
 import { appendFileSync } from 'node:fs';
-import { queue, logRun, views, writer, TABS } from '../lib/sheet.js';
+import { queue, read, logRun, views, writer, TABS } from '../lib/sheet.js';
 import { now } from '../lib/config.js';
 import { validateEvaluation } from './contract.js';
 
 export async function classifyQueue(clf, limit = 500, log = console.log, { deadline = Infinity, refreshView = false } = {}) {
   const startedAt = now();
   if (clf.init) await clf.init();
-  const rows = await queue(clf.name, limit, clf.rankBy, Boolean(clf.onlyNew));
+  // CON_FATTI=1: ripassa tutte le startup da valutare che hanno fatti dal crawler founder (dopo una modifica alle regole)
+  const rows = process.env.CON_FATTI === '1'
+    ? (await read(TABS.cand)).filter(c => c.fatti_il && c.stato_crawler === 'da_valutare').slice(0, limit)
+    : await queue(clf.name, limit, clf.rankBy, Boolean(clf.onlyNew));
   const out = writer(TABS.eval, 'id', clf.writeEvery || 200);
   const st = { classificatore: clf.name, in_coda: rows.length, scritte: 0, non_valide: 0, errori: 0, saltate_per_tempo: 0, esiti: {}, fit: {} };
   let fatal = null, i = 0;

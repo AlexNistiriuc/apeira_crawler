@@ -14,7 +14,7 @@ import { now, today } from '../../lib/config.js';
 import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed } from '../../lib/search.js';
 import { registryLookup, registryStats } from '../../lib/registry.js';
 import { estimateAge } from '../../signals/age.estimate.js';
-import { pickPeople, verifiedFromEstimate, registryFounders, newsFunding } from '../../signals/facts.js';
+import { pickPeople, verifiedFromEstimate, registryFounders, newsFunding, companyName } from '../../signals/facts.js';
 
 const FIT = { Alto: 0, Medio: 1, Basso: 2 };
 const PREC = { sage: 0, claude: 1, euristico: 2 };
@@ -37,7 +37,7 @@ export function pickBest(evals, n) {
 
 /** Stessa ricerca e stesso filtro che usava Sage: risultati che nominano la startup. */
 export async function fundingNews(c) {
-  const name = c.nome || c.dominio;
+  const name = companyName(c);
   const res = await webSearch(`"${name}" funding OR raises OR "pre-seed" OR seed OR grant OR award`);
   const dom = String(c.dominio || '').toLowerCase(), nm = String(name).toLowerCase();
   return res.filter(x => { const h = `${x.url} ${x.title} ${x.snippet}`.toLowerCase(); return h.includes(dom) || (nm.length > 4 && h.includes(nm)); })
@@ -79,7 +79,7 @@ export async function run(n = 100, log = console.log) {
         const parts = [], fonti = [];
         for (const p of people) {
           st.persone++;
-          const res = await webSearch(`"${p.nome}" ${c.nome || c.dominio}`);
+          const res = await webSearch(`"${p.nome}" ${companyName(c)}`);
           const e = estimateAge(p.nome, res);
           if (e.eta != null) st.stimate++;
           const v = verifiedFromEstimate(p, e);
@@ -99,7 +99,7 @@ export async function run(n = 100, log = console.log) {
       const news = await fundingNews(c);
       row.notizie_funding = JSON.stringify(news);
       if (news.length) st.notizie++;
-      const f = newsFunding(news, c.nome || c.dominio, c.dominio);
+      const f = newsFunding(news, companyName(c), c.dominio);
       if (f.investimenti.length || f.grant.length || f.fase) decisive = true;
     }
     if (decisive) { st.fatti_decisivi++; row.ultimo_check = now(); }

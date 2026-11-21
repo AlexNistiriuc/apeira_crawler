@@ -81,7 +81,7 @@ test('euristico: registro, età verificate, notizie, portfolio VC', async () => 
   assert.equal(young.under30, 'sì');
   assert.doesNotMatch(young.da_verificare, /età founder/);
   assert.match(young.fonti, /reg\/1/);
-  const big = await euristico.classify({ ...base, notizie_funding: JSON.stringify([{ url: 'https://n/1', title: 'Qubo raises €2M', snippet: '' }]) });
+  const big = await euristico.classify({ ...base, notizie_funding: JSON.stringify([{ url: 'https://qubo.fr/news', title: 'Qubo raises €2M', snippet: '' }]) });
   assert.equal(big.esito, 'Esclusa');
   const plain = await euristico.classify(base);
   const vc = await euristico.classify({ ...base, hub_origine: 'Seedcamp portfolio, Station F' });
@@ -99,4 +99,25 @@ test('crawler founder: con Sage spento lavora sulle migliori dell euristico', ()
     { dominio: 'd', classificatore: 'claude', esito: 'Needs verification', fit: 'Medio', voto: 60 },
   ], 10);
   assert.deepEqual(best.map(v => v.dominio), ['a', 'd']);
+});
+
+test('notizie: nome generico, fondi omonimi, conferma del round', async () => {
+  const { companyName, confirmedOver } = await import('../src/signals/facts.js');
+  assert.equal(companyName({ nome: 'startup', dominio: 'collimatehealth.com' }), 'collimatehealth');
+  assert.equal(companyName({ nome: 'Kova Labs', dominio: 'kovahq.com' }), 'Kova Labs');
+  assert.equal(companyName({ nome: 'Elea & Lili', dominio: 'elealili.com' }), 'Elea & Lili');
+  const fund = newsFunding([{ url: 'u', title: 'Stratos Ventures raises $50M for early-stage defense fund', snippet: '' }], 'Stratos', 'stratos.software');
+  assert.equal(fund.inv_usd, 0, 'un fondo che raccoglie non è la startup');
+  const two = newsFunding([{ url: 'a', title: 'Iris Labs raises $20 million from Flagship', snippet: '' }, { url: 'b', title: 'IRIS Lab raised $2.9 million in seed round', snippet: '' }], 'Iris Lab', 'irislab.io');
+  assert.equal(confirmedOver(two.investimenti, 500000), false, 'due importi diversi: possibili omonimi');
+  const same = newsFunding([{ url: 'a', title: 'Gobano raises €3M pre-seed', snippet: '' }, { url: 'b', title: 'Gobano Robotics raised a €3M pre-seed round', snippet: '' }], 'Gobano Robotics', 'gobano.ai');
+  assert.equal(confirmedOver(same.investimenti, 500000), true);
+  const g = newsFunding([{ url: 'a', title: 'DiaSense grant. Total Funding Raised $6.44M grant', snippet: 'DiaSense wins grant of $6.44M' }], 'DiaSense', 'diasense.dk');
+  assert.equal(g.grant_usd, 6440000, 'importo ripetuto conta una volta');
+});
+
+test('euristico: una sola notizia senza dominio non esclude, abbassa e chiede conferma', async () => {
+  const one = await euristico.classify({ ...base, notizie_funding: JSON.stringify([{ url: 'https://n/1', title: 'Qubo raises €2M', snippet: '' }]) });
+  assert.equal(one.esito, 'Needs verification');
+  assert.match(one.motivo, /da confermare che sia la stessa azienda/);
 });

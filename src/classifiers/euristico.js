@@ -4,7 +4,7 @@
 import { CRITERIA as C } from '../lib/config.js';
 import { teamEstimate, money, founderAgeLabel, labAccess } from '../signals/derive.js';
 import { VCH } from '../signals/patterns.js';
-import { parseJson, newsFunding, founderCount } from '../signals/facts.js';
+import { parseJson, newsFunding, founderCount, companyName, confirmedOver } from '../signals/facts.js';
 
 const usd = n => (n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : Math.round(n / 1e3) + 'k') + ' USD';
 const NOT_VC = /(incubat|accelerat|universit|school|college|institut|lab\b|hub\b|program|cohort)/i;
@@ -21,7 +21,7 @@ export default {
     const reg = parseJson(c.registro);
     const vAges = parseJson(c.eta_verificate, []) || [];
     const news = parseJson(c.notizie_funding, []) || [];
-    const nf = newsFunding(news, c.nome || c.dominio, c.dominio);
+    const nf = newsFunding(news, companyName(c), c.dominio);
 
     // fondazione
     const fy = (ev.anni_dichiarati || []).filter(y => y >= 2010 && y <= 2026);
@@ -52,7 +52,10 @@ export default {
     if (m.invUsd > C.max_outside_investment_usd) ex.push('investimenti oltre 500k USD');
     if ((ev.fund?.l || 0) >= 2) ex.push('round già chiuso: ' + (ev.fund.x || []).join(', '));
     let grantTxt = m.grantTxt, invTxt = m.invTxt, phaseDown = 0;
-    if (nf.inv_usd > C.max_outside_investment_usd) ex.push(`investimenti oltre 500k USD (notizie: ${nf.investimenti[0].importo})`);
+    if (nf.inv_usd > C.max_outside_investment_usd) {
+      if (confirmedOver(nf.investimenti, C.max_outside_investment_usd)) ex.push(`investimenti oltre 500k USD (notizie: ${nf.top_inv.importo})`);
+      else { note.push(`una notizia parla di ${nf.top_inv.importo} raccolti, da confermare che sia la stessa azienda`); ver.push('investimenti esterni (notizia da confermare)'); phaseDown++; }
+    }
     if (m.grantUsd + nf.grant_usd > C.max_grants_usd && !(m.grantUsd > C.max_grants_usd)) ex.push(`grant oltre 1M USD (notizie: ${usd(m.grantUsd + nf.grant_usd)})`);
     if (nf.investimenti.length) { invTxt = `notizie: ${nf.investimenti.map(x => x.importo).join(', ')}` + (m.invTxt ? ' · sito: ' + m.invTxt : ''); fonti.push(...nf.investimenti.map(x => x.url)); }
     if (nf.grant.length) { grantTxt = `notizie: ${nf.grant.map(x => x.importo).join(', ')}` + (m.grantTxt ? ' · sito: ' + m.grantTxt : ''); fonti.push(...nf.grant.map(x => x.url)); }

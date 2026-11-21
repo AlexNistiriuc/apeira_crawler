@@ -5,6 +5,7 @@ on:
     inputs:
       classificatore: { description: 'nome del file in src/classifiers', default: 'euristico' }
       limite: { description: 'quanti candidati al massimo', default: '3000' }
+      con_fatti: { description: 'ripassa tutte le startup con fatti del crawler founder (1 = sì)', default: '0' }
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -18,3 +19,5 @@ jobs:
         env:
           SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
           SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
+          CON_FATTI: ${{ inputs.con_fatti || '0' }}
+          REFRESH_VIEW: '1'
