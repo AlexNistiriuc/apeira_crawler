@@ -31,6 +31,20 @@ jobs:
         env:
           SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
           SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
+      # fatti su età founder e fase (registri, Brave) PRIMA dei valutatori: così valutano una volta sola, con tutti i fatti
+      - if: always() && steps.crawl.outcome == 'success'
+        run: npm run founders -- 40
+        env:
+          SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
+          SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
+          SEARCH_API_KEY: ${{ secrets.SEARCH_API_KEY }}
+          COMPANIES_HOUSE_KEY: ${{ secrets.COMPANIES_HOUSE_KEY }}
+      # l'euristico ripassa solo le startup con fatti nuovi (il crawler founder ha aggiornato ultimo_check)
+      - if: always() && steps.crawl.outcome == 'success'
+        run: npm run classify -- euristico 3000
+        env:
+          SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
+          SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
       # catena: appena finisce un giro riuscito ne parte un altro, così il crawler lavora senza sosta
       # (il cron orario resta come rete di sicurezza: GitHub a volte salta o ritarda gli orari programmati).
       # Si ferma da sola se il crawler fallisce, così un errore non brucia minuti in un ciclo veloce.
@@ -41,14 +55,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-      # stima età di CEO e CTO delle migliori (Sage o Claude), con Brave e regole: non dipende da Sage
-      - if: always() && steps.crawl.outcome == 'success'
-        run: npm run founders -- 40
-        env:
-          SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
-          SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
-          SEARCH_API_KEY: ${{ secrets.SEARCH_API_KEY }}
-          COMPANIES_HOUSE_KEY: ${{ secrets.COMPANIES_HOUSE_KEY }}
       - if: always() && steps.crawl.outcome == 'success'
         run: gh workflow run crawl-startups.yml --ref main
         env:
