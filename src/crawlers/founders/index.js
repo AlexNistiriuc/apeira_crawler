@@ -117,5 +117,5 @@ export async function run(n = 100, log = console.log) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  run(Number(process.argv[2] || 100)).catch(e => { console.error(e); process.exit(1); });
+  run(Number(process.argv[2] || 100)).then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });
 }

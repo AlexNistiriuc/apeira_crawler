@@ -1,6 +1,7 @@
 // Crawler delle startup. Legge gli hub attivi da db_hub, scopre i candidati, li controlla
 // e scrive ogni candidato in db_candidati. Aggiorna le statistiche degli hub letti.
 // Avvio: npm run startups   (variabili: SHEET_API_URL, SHEET_API_TOKEN, opzionali JINA_KEY, RUN_MINUTES)
+import { appendFileSync } from 'node:fs';
 import { read, upsert, writer, logRun, TABS } from '../../lib/sheet.js';
 import { host, reg, bad } from '../../lib/url.js';
 import { deadlineFromNow, now, SOURCES } from '../../lib/config.js';
@@ -139,6 +140,10 @@ export async function run({ deadline = deadlineFromNow(), log = console.log } = 
   await hubOut.flush();
   await refreshHubStats(log);
 
+  // altro lavoro: hub rimasti fuori dal tetto del giro o candidati non controllati. Se no, la catena si ferma
+  // e la fa ripartire il crawler hub quando trova hub nuovi (così non gira un'ora per 3 startup).
+  st.hub_da_leggere = due.length;
+  st.altro_lavoro = due.length >= MAX_HUBS || st.rimandati > 0 || st.hub_letti < due.length;
   Object.assign(st, { http: httpStats });
   await logRun('crawler startup', startedAt, st);
   log('fine run', JSON.stringify(st));
@@ -167,5 +172,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   // un errore imprevisto su un singolo sito non deve uccidere un giro da 45 minuti
   process.on('uncaughtException', e => console.error('errore imprevisto ignorato:', e?.message || e));
   process.on('unhandledRejection', e => console.error('promessa rifiutata ignorata:', e?.message || e));
-  run().catch(e => { console.error(e); process.exit(1); });
+  run().then(st => {
+    if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `altro_lavoro=${st.altro_lavoro}\nhub_letti=${st.hub_letti}\n`);
+    // fine esplicita: timer e connessioni rimaste aperte tenevano vivo il processo fino a 40 minuti dopo la fine del lavoro
+    process.exit(0);
+  }).catch(e => { console.error(e); process.exit(1); });
 }

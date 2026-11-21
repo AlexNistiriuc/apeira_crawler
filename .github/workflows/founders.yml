@@ -1,0 +1,31 @@
+name: crawler founder
+# Lancio a mano: raccoglie subito i fatti mancanti (registri, età founder, notizie di funding) sulle startup migliori
+# già valutate, poi l'euristico ripassa quelle con fatti nuovi e la vista si aggiorna.
+on:
+  workflow_dispatch:
+    inputs:
+      quante: { description: 'quante startup al massimo', default: '60' }
+concurrency: { group: crawler-founder, cancel-in-progress: false }
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npm run founders -- "$QUANTE"
+        env:
+          QUANTE: ${{ inputs.quante }}
+          SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
+          SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
+          SEARCH_API_KEY: ${{ secrets.SEARCH_API_KEY }}
+          COMPANIES_HOUSE_KEY: ${{ secrets.COMPANIES_HOUSE_KEY }}
+      - run: npm run classify -- euristico 3000
+        env:
+          SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
+          SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
+          REFRESH_VIEW: '1'

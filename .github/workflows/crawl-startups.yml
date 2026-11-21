@@ -55,8 +55,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-      - if: always() && steps.crawl.outcome == 'success'
-        run: gh workflow run crawl-startups.yml --ref main
+      # riparte subito solo se c'è altro lavoro (hub rimasti o candidati non controllati). Altrimenti si ferma:
+      # lo fa ripartire il crawler hub appena trova hub nuovi (il cron orario resta come rete di sicurezza).
+      # Tre tentativi: un riavvio fallito fermava la catena per ore.
+      - if: always() && steps.crawl.outcome == 'success' && steps.crawl.outputs.altro_lavoro == 'true'
+        run: for i in 1 2 3; do gh workflow run crawl-startups.yml --ref main && exit 0; sleep 20; done; exit 1
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

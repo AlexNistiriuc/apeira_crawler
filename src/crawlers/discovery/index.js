@@ -182,5 +182,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   process.on('uncaughtException', e => console.error('errore imprevisto ignorato:', e?.message || e));
   run().then(st => {
     if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `hub_nuovi=${st.hub_aggiunti}\n`);
+    process.exit(0);
   }).catch(e => { console.error(e); process.exit(1); });
 }
