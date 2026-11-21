@@ -143,3 +143,8 @@ test('Saturn Dynamics: round in snippet incollato e pagina dedicata, nomi con a 
   assert.equal(fundSig('Backed and advised by Industry leaders').l, 1);
   assert.equal(fundSig('Funded by the European Union').l, 0);
 });
+
+test('omonimi: Zephyr AI non è Zephyra', () => {
+  const f = newsFunding([{ url: 'https://businesswire.com/news/x', title: 'Zephyr AI Raises $18.5 Million in Seed Funding', snippet: '' }], 'Zephyra', 'zephyra.tech');
+  assert.equal(f.inv_usd, 0);
+});

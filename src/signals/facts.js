@@ -98,9 +98,12 @@ export function newsFunding(news, name, domain) {
   for (const [ni, n] of (news || []).entries()) {
     const hasDom = Boolean(dom) && fold(`${n.url || ''} ${n.title || ''} ${n.snippet || ''}`).includes(dom);
     const slug = urlIsAbout(n.url, name, domain);   // pagina dedicata: ogni frase parla della startup
-    for (const sent of unglue(`${n.title || ''}. ${n.snippet || ''}`).split(/(?<=[.!?])\s+|\s…\s|\s·\s/)) {
+    // il nome stesso può essere in CamelCase (DiaSense): lo si protegge prima di rimettere gli spazi
+    const esc = String(name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const raw = `${n.title || ''}. ${n.snippet || ''}`.replace(esc.length >= 3 ? new RegExp(esc, 'gi') : /$^/, m => m.replace(/([a-z])([A-Z])/g, '$1\u0001$2'));
+    for (const sent of unglue(raw).replace(/\u0001/g, '').split(/(?<=[.!?])\s+|\s…\s|\s·\s/)) {
       const f = fold(sent);
-      if (!slug && !mentions(f) && !mentions(f.replace(/ /g, ''))) continue;
+      if (!slug && !mentions(f)) continue;
       const tm = f.match(/\b(\d{1,3}|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty)[- ](person|people|member|strong)\b[^.]{0,15}\bteam\b|\bteam of (\d{1,3}|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty)\b/);
       if (tm) { const v = tm[1] || tm[3]; out.team = Math.max(out.team, NUM[v] || Number(v) || 0); }
       for (const [re, k] of STAGE) if (re.test(sent) && (!out.fase || k === 'series' || (k === 'seed' && out.fase === 'pre-seed'))) out.fase = k;

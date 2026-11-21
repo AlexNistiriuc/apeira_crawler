@@ -52,11 +52,12 @@ export async function run(n = 100, log = console.log) {
   else log('SEARCH_API_KEY mancante: solo registri, niente ricerche');
   const all = await read(TABS.cand, { columns: ['dominio', 'nome', 'founder_nomi', 'descrizione', 'hub_origine', 'eta_il', 'eta_stimata', 'fatti_il', 'notizie_funding', 'round_notizie'] });
   // riassunto dei round per chi ha già le notizie salvate (nessuna ricerca): lo vede la vista e l'agente di outreach
-  const back = all.filter(c => c.notizie_funding && !c.round_notizie).map(c => {
+  // si ricalcola per tutti (regole cambiate = riassunto diverso); si scrive solo dove cambia
+  const back = all.filter(c => c.notizie_funding).map(c => {
     const news = parseJson(c.notizie_funding, []) || [];
     const f = newsFunding(news, companyName(c), c.dominio);
-    return { dominio: c.dominio, round_notizie: f.riassunto || (news.length ? 'nessun importo' : 'nessuna notizia'), ultimo_check: now() };
-  });
+    return { dominio: c.dominio, round_notizie: f.riassunto || (news.length ? 'nessun importo' : 'nessuna notizia'), ultimo_check: now(), _old: c.round_notizie };
+  }).filter(r => r.round_notizie !== r._old).map(({ _old, ...r }) => r);
   if (back.length) { await upsert(TABS.cand, 'dominio', back); st.riassunti_recuperati = back.length; }
   const cands = new Map(all.map(c => [c.dominio, c]));
   const best = pickBest(await read(TABS.eval, { columns: ['dominio', 'classificatore', 'esito', 'fit', 'voto'] }), Infinity)
