@@ -101,7 +101,7 @@ export function newsFunding(news, name, domain) {
     // il nome stesso può essere in CamelCase (DiaSense): lo si protegge prima di rimettere gli spazi
     const esc = String(name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const raw = `${n.title || ''}. ${n.snippet || ''}`.replace(esc.length >= 3 ? new RegExp(esc, 'gi') : /$^/, m => m.replace(/([a-z])([A-Z])/g, '$1\u0001$2'));
-    for (const sent of unglue(raw).replace(/\u0001/g, '').split(/(?<=[.!?])\s+|\s…\s|\s·\s/)) {
+    for (const sent of unglue(raw).replace(/\u0001/g, '').split(/(?<=[.!?])\s+|\s…\s/)) {
       const f = fold(sent);
       if (!slug && !mentions(f)) continue;
       const tm = f.match(/\b(\d{1,3}|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty)[- ](person|people|member|strong)\b[^.]{0,15}\bteam\b|\bteam of (\d{1,3}|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty)\b/);

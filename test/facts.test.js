@@ -148,3 +148,8 @@ test('omonimi: Zephyr AI non è Zephyra', () => {
   const f = newsFunding([{ url: 'https://businesswire.com/news/x', title: 'Zephyr AI Raises $18.5 Million in Seed Funding', snippet: '' }], 'Zephyra', 'zephyra.tech');
   assert.equal(f.inv_usd, 0);
 });
+
+test('profili tipo Caplight: "Grant · ... · Total Funding Raised · $6.44M" resta un solo pezzo', () => {
+  const g = newsFunding([{ url: 'https://caplight.com/company/diasense', title: 'DiaSense | Valuation, Funding Rounds', snippet: 'Copenhagen Last Round · Grant · Mar 17, 2026 · Total Funding Raised · $6.44M · DiaSense is a deep-tech company' }], 'DiaSense', 'diasense.dk');
+  assert.ok(g.grant_usd >= 6e6 || g.inv_usd >= 6e6);
+});
