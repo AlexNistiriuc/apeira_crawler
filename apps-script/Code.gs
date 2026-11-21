@@ -21,13 +21,13 @@ var SCHEMA = {
   db_candidati: { key: 'dominio', columns: ['dominio', 'nome', 'sito', 'hub_origine', 'primo_visto', 'ultimo_check', 'stato_crawler', 'motivo', 'dominio_registrato', 'primo_archivio', 'anni_sul_sito', 'settori', 'punteggio_deep', 'europa', 'segnali_funding', 'email', 'linkedin_azienda', 'linkedin_persone', 'founder_nomi', 'team_stima', 'descrizione', 'domanda_reale', 'evidenze', 'pagine_lette', 'versione_crawler', 'snowball_il', 'eta_stimata', 'fonti_eta', 'eta_il'] },
   db_valutazioni: { key: 'id', columns: ['id', 'dominio', 'classificatore', 'versione', 'valutato_il', 'esito', 'fit', 'voto', 'motivo', 'fondazione', 'grant', 'investimenti', 'accesso_lab', 'team', 'eta_founder', 'under30', 'domanda_reale', 'da_verificare', 'fonti', 'nota_alex', 'eta_stimata', 'fonti_eta'] },
   db_log: { key: null, columns: ['componente', 'inizio', 'fine', 'statistiche'] },
-  db_scoperta: { key: 'query', columns: ['query', 'tipo', 'settore', 'luogo', 'usata_il', 'risultati', 'hub_nuovi', 'hub_utili'] }
+  db_scoperta: { key: 'query', columns: ['query', 'tipo', 'settore', 'luogo', 'livello', 'usata_il', 'risultati', 'hub_nuovi', 'hub_utili'] }
 };
 var ENUMS = {
   'db_valutazioni.esito': ['Qualificata', 'Needs verification', 'Esclusa'],
   'db_valutazioni.fit': ['Alto', 'Medio', 'Basso'],
   'db_candidati.stato_crawler': ['da_valutare', 'scartata', 'sito_morto', 'da_ricontrollare'],
-  'db_hub.stato': ['attivo', 'escluso_vc', 'escluso_junk', 'irraggiungibile', 'in_pausa']
+  'db_hub.stato': ['attivo', 'da_verificare', 'senza_resa', 'escluso_vc', 'escluso_junk', 'irraggiungibile', 'in_pausa']
 };
 var VIEW_TAB = 'Startup trovate';
 var OLD_TABS = ['Classifica', 'pool_founder_startup', 'Hub del crawler']; // sostituiti dai tab db_*: setup() li nasconde

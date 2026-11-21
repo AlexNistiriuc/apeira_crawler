@@ -122,13 +122,13 @@ export async function viaJina(url) {
  * Legge una pagina e la restituisce come testo in stile Jina.
  * @returns {{status:number, text:string, via:'direct'|'jina'|'none', finalUrl?:string}}
  */
-export async function getPage(url, { jinaFallback = true, maxJinaBacklog = Infinity } = {}) {
+export async function getPage(url, { jinaFallback = true, maxJinaBacklog = Infinity, timeoutMs = DEFAULT_MS } = {}) {
   let h; try { h = new URL(url).hostname; } catch { return { status: 0, text: '', via: 'none' }; }
   if (!(await allowed(url))) { stats.robotsBlocked++; return { status: 403, text: '', via: 'none', robots: true }; }
   const done = await hostSlot(h);
   let status = 0;
   try {
-    const r = await tfetch(url, { headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml', 'Accept-Language': 'en,it;q=0.8,de;q=0.6,fr;q=0.5' } });
+    const r = await tfetch(url, { headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml', 'Accept-Language': 'en,it;q=0.8,de;q=0.6,fr;q=0.5' } }, timeoutMs);
     status = r.status;
     const ct = r.headers.get('content-type') || '';
     if (r.ok && /html|xml|text\/plain/.test(ct)) {

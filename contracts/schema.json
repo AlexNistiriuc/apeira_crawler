@@ -104,6 +104,7 @@
         "tipo",
         "settore",
         "luogo",
+        "livello",
         "usata_il",
         "risultati",
         "hub_nuovi",
@@ -114,6 +115,8 @@
   "enums": {
     "db_hub.stato": [
       "attivo",
+      "da_verificare",
+      "senza_resa",
       "escluso_vc",
       "escluso_junk",
       "irraggiungibile",

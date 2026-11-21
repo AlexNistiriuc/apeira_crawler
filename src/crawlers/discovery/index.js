@@ -1,10 +1,13 @@
 // Scoperta continua di pool (hub): non una lista fissa, ma un ciclo che cerca, testa e impara.
-//  1. genera domande tipo + settore + luogo + anno (config/discovery.json), scegliendo più spesso
-//     le combinazioni che hanno già portato hub utili e lasciando una quota di esplorazione;
+//  1. domande a livelli (config/discovery.json): 0 liste di liste, 1 tipo + paese, poi 2 settore + tipo + paese
+//     e 3 settore + tipo + città solo dove i pattern hanno già reso; sceglie le combinazioni migliori,
+//     con una quota di esplorazione;
 //  2. cerca con Brave (poche ricerche a giro, tetto mensile dedicato);
-//  3. segue gratis i link "pool" (eventi, programmi, partner) degli hub che rendono di più;
-//  4. testa ogni pagina trovata: deve sembrare un pool (molti link a siti esterni + parole da pool);
-//  5. aggiunge gli hub buoni in db_hub e registra ogni domanda in db_scoperta, con la sua resa.
+//  3. testa ogni risultato: pool forte -> attivo, pool probabile -> da_verificare (il crawler startup
+//     lo legge e, se non rende, lo mette senza_resa); pagine-lista -> estrae e testa ogni pool elencato;
+//  4. snowball dagli hub che rendono: link esterni a programmi, eventi, partner, anche dalle loro pagine
+//     "partners / network / events / programmes", ogni hub al massimo una volta ogni 14 giorni;
+//  5. registra ogni domanda in db_scoperta con livello e resa.
 // Uso: npm run discovery
 import { readFileSync, appendFileSync } from 'node:fs';
 import { read, upsert, logRun, TABS } from '../../lib/sheet.js';
@@ -17,73 +20,120 @@ import { hubType } from '../hubs/classify.js';
 
 const CFG = JSON.parse(readFileSync(new URL('../../../config/discovery.json', import.meta.url), 'utf8'));
 const POOL_WORDS = /(startups?|teams?|finalists?|participants?|cohorts?|portfolio|alumni|exhibitors?|winners?|batch|residents?|founders|spin-?offs?|ventures|projects|laureates|fellows)/i;
-const POOL_LINK = /(accelerat|incubat|hackathon|summit|festival|award|prize|challenge|competition|programme|program|fellowship|demo-?day|venture-?lab|startup-?week|bootcamp|launchpad|science-?park|innovation-?hub|spin-?off)/i;
-const NOT_POOL = /(news|blog|article|press-release|jobs|careers|wikipedia|youtube|linkedin|facebook|instagram|x\.com|twitter|eventbrite\.[a-z]+\/e\/|crunchbase|dealroom|f6s|tracxn|medium\.com)/i;
+const POOL_LINK = /(accelerat|incubat|hackathon|summit|festival|award|prize|challenge|competition|programme|program|fellowship|demo-?day|venture-?lab|startup-?week|bootcamp|launchpad|science-?park|innovation-?hub|spin-?off|startup)/i;
+const LIST_PAGE = /(\blist\b|\btop ?\d+|\bbest\b|directory|database|calendar|overview|ranking|guide to|\bmap of\b|\d+ (startup|accelerator|incubator|hackathon|event|competition)s)/i;
+const HUB_SUBPAGE = /(partner|network|ecosystem|events?|programs?|programmes?|community|friends|initiatives|collaborations?)/i;
+const NOT_POOL = /(news|blog|article|press-release|jobs|careers|wikipedia|youtube|linkedin|facebook|instagram|x\.com|twitter|eventbrite\.[a-z]+\/e\/|crunchbase|dealroom|f6s|tracxn|medium\.com|reddit|quora)/i;
 
-/** Punteggio di una combinazione: media con prior (1 successo su 2 tentativi), così le nuove partono a 0,5. */
 export const score = s => (s.utili + 1) / (s.nuovi + 2);
+const plural = t => (/s$/.test(t) ? t : t + 's');
+const get = (m, k) => m[k] || { utili: 0, nuovi: 0 };
 
-/** Sceglie n domande nuove: per lo più dalle combinazioni migliori, a volte a caso (esplorazione). */
-export function pickQueries(used, stats, n, rnd = Math.random) {
-  const all = [];
-  for (const t of CFG.tipi) for (const s of CFG.settori) for (const l of CFG.luoghi) {
-    const q = [s, t, l, CFG.anni[0]].filter(Boolean).join(' ');
-    if (!used.has(q)) all.push({ q, t, s: s || '-', l });
+/** Tutte le domande possibili, a livelli; i livelli 2-3 solo dove il tipo (e il settore) hanno reso. */
+export function candidates(used, stats) {
+  const anno = CFG.anni[0], out = [];
+  const push = (q, t, s, l, livello) => { if (!used.has(q)) out.push({ q, t, s, l, livello }); };
+  for (const t of CFG.tipi) for (const p of CFG.paesi) {
+    for (const m of CFG.modelli_liste) push(m.replace('{tipi}', plural(t)).replace('{tipo}', t).replace('{paese}', p).replace('{anno}', anno), t, '-', p, 0);
+    push(`${t} ${p} ${anno}`, t, '-', p, 1);
   }
-  const val = x => (score(stats.tipo[x.t] || { utili: 0, nuovi: 0 }) + score(stats.settore[x.s] || { utili: 0, nuovi: 0 }) + score(stats.luogo[x.l] || { utili: 0, nuovi: 0 })) / 3;
+  for (const t of CFG.tipi) {
+    if (get(stats.tipo, t).utili < 1) continue;                       // livello 2 solo per tipi che rendono
+    for (const s of CFG.settori.filter(Boolean)) {
+      for (const p of CFG.paesi) push(`${s} ${t} ${p}`, t, s, p, 2);
+      if (get(stats.coppia, `${t}|${s}`).utili < 1) continue;         // livello 3 solo per coppie che rendono
+      for (const c of CFG.citta) push(`${s} ${t} ${c} ${anno}`, t, s, c, 3);
+    }
+  }
+  return out;
+}
+
+/** Sceglie n domande: per lo più le migliori (livelli alti solo se sbloccati), a volte a caso. */
+export function pickQueries(used, stats, n, rnd = Math.random) {
+  const all = candidates(used, stats);
+  const val = x => (score(get(stats.tipo, x.t)) + score(get(stats.settore, x.s)) + score(get(stats.luogo, x.l))) / 3 + (x.livello >= 2 ? 0.1 : 0);
   const out = [];
   while (out.length < n && all.length) {
-    let i;
+    let i = 0;
     if (rnd() < CFG.esplorazione) i = Math.floor(rnd() * all.length);
-    else { let best = -1; i = 0; all.forEach((x, k) => { const v = val(x) + rnd() * 0.01; if (v > best) { best = v; i = k; } }); }
+    else { let best = -1; all.forEach((x, k) => { const v = val(x) + rnd() * 0.01; if (v > best) { best = v; i = k; } }); }
     out.push(all.splice(i, 1)[0]);
   }
   return out;
 }
 
-/** Test: la pagina sembra un pool di startup? */
+/** Test: forte -> attivo, leggero -> da_verificare, altrimenti no. */
 export function looksLikePool(url, md) {
   const own = reg(host(url));
   const ext = new Set();
   for (const [, l] of links(md)) { const h = host(l); if (h && reg(h) !== own && !bad(h)) ext.add(reg(h)); }
   const words = (String(md).match(new RegExp(POOL_WORDS.source, 'gi')) || []).length;
-  const ok = ext.size >= 8 && words >= 3 && !VCH.test(url) && !JUNKHUB.test(url);
-  return { ok, esterni: ext.size, parole: words };
+  const blocked = VCH.test(url) || JUNKHUB.test(url);
+  const stato = blocked ? null : ext.size >= 8 && words >= 3 ? 'attivo' : ext.size >= 5 && words >= 2 ? 'da_verificare' : null;
+  return { ok: !!stato, stato, esterni: ext.size, parole: words };
 }
 
-async function testAndBuild(url, name, origine, pattern) {
-  if (NOT_POOL.test(url) || bad(host(url))) return null;
-  const r = await getPage(url, { jinaFallback: false });
-  if (r.status !== 200 || !r.text) return null;
-  const t = looksLikePool(url, r.text);
-  if (!t.ok) return null;
-  const title = (r.text.match(/^Title:\s*(.*)$/m) || [])[1] || name || host(url);
-  return { hub_id: hubKey(url), nome: String(title).slice(0, 80), url, origine, tipo: hubType(title + ' ' + (pattern || ''), url), stato: 'attivo', priorita: '12', scoperto_il: today(), note: `test: ${t.esterni} siti esterni, ${t.parole} parole da pool` };
+/** Link a possibili pool elencati in una pagina (pagine-lista, partner, eventi). */
+export function poolLinks(url, md, all = false) {
+  const own = reg(host(url)), out = new Map();
+  for (const [tx, l] of links(md)) {
+    const h = host(l);
+    if (!h || reg(h) === own || bad(h) || NOT_POOL.test(l)) continue;
+    if (!all && !POOL_LINK.test(l + ' ' + tx)) continue;
+    const k = hubKey(l); if (k && !out.has(k)) out.set(k, { url: l, nome: tx });
+  }
+  return [...out.values()];
 }
 
-export async function run({ log = console.log } = {}) {
+export async function run({ log = console.log, deadline = Date.now() + CFG.minuti_per_giro * 60_000 } = {}) {
   const startedAt = now();
-  const st = { domande: 0, risultati: 0, testati: 0, hub_nuovi: 0, da_link: 0 };
-  const hubs = await read(TABS.hub, { columns: ['hub_id', 'nome', 'url', 'origine', 'candidati_trovati', 'candidati_da_valutare', 'scoperta_il'] });
+  const st = { domande: 0, risultati: 0, testati: 0, hub_nuovi: 0, da_verificare: 0, da_liste: 0, da_hub: 0 };
+  const hubs = await read(TABS.hub, { columns: ['hub_id', 'nome', 'url', 'origine', 'stato', 'candidati_trovati', 'candidati_da_valutare', 'scoperta_il'] });
   const have = new Set(hubs.map(h => h.hub_id));
   const add = [];
-  const keep = row => { if (row && row.hub_id && !have.has(row.hub_id)) { have.add(row.hub_id); add.push(row); return true; } return false; };
+  let tests = 0;
+  const canTest = () => tests < CFG.test_per_giro && Date.now() < deadline;
 
-  // resa delle domande passate: hub nati da ogni domanda e quanti hanno dato startup da valutare
+  /** Legge una pagina, la testa come pool e, se è una lista, testa anche i pool elencati. */
+  async function test(url, name, origine, hint, depth = 0) {
+    const id = hubKey(url);
+    if (!id || have.has(id) || NOT_POOL.test(url) || bad(host(url)) || !canTest()) return 0;
+    tests++; st.testati++;
+    const r = await getPage(url, { jinaFallback: false });
+    if (r.status !== 200 || !r.text) return 0;
+    const title = (r.text.match(/^Title:\s*(.*)$/m) || [])[1] || name || host(url);
+    let found = 0;
+    const t = looksLikePool(url, r.text);
+    if (t.ok) {
+      have.add(id); found++;
+      add.push({ hub_id: id, nome: String(title).slice(0, 80), url, origine, tipo: hubType(title + ' ' + (hint || ''), url), stato: t.stato, priorita: t.stato === 'attivo' ? '12' : '8', scoperto_il: today(), note: `test: ${t.esterni} siti esterni, ${t.parole} parole da pool` });
+      if (t.stato === 'da_verificare') st.da_verificare++;
+    }
+    // pagina-lista: ogni pool elencato è un candidato (un livello solo, per non allargarsi all'infinito)
+    if (depth === 0 && (LIST_PAGE.test(title + ' ' + url) || poolLinks(url, r.text).length >= 6)) {
+      for (const p of poolLinks(url, r.text, LIST_PAGE.test(title)).slice(0, CFG.link_da_lista)) {
+        const n = await test(p.url, p.nome, `${origine} (da lista)`, hint, 1);
+        found += n; st.da_liste += n;
+      }
+    }
+    return found;
+  }
+
+  // resa delle domande passate (hub nati da ogni domanda e quanti hanno dato startup da valutare)
   const scop = await read('db_scoperta');
   const byQ = new Map(scop.map(s => [s.query, s]));
   const yieldOf = {};
-  for (const h of hubs) { const m = String(h.origine).match(/^scoperta: (.+)$/); if (m) { const y = yieldOf[m[1]] = yieldOf[m[1]] || { nuovi: 0, utili: 0 }; y.nuovi++; if (+h.candidati_da_valutare > 0) y.utili++; } }
-  const stats = { tipo: {}, settore: {}, luogo: {} };
+  for (const h of hubs) { const m = String(h.origine).match(/^scoperta: (.+?)( \(da lista\))?$/); if (m) { const y = yieldOf[m[1]] = yieldOf[m[1]] || { nuovi: 0, utili: 0 }; y.nuovi++; if (+h.candidati_da_valutare > 0) y.utili++; } }
+  const stats = { tipo: {}, settore: {}, luogo: {}, coppia: {} };
   const updates = [];
   for (const s of scop) {
     const y = yieldOf[s.query] || { nuovi: 0, utili: 0 };
-    for (const [k, v] of [['tipo', s.tipo], ['settore', s.settore], ['luogo', s.luogo]]) { const o = stats[k][v] = stats[k][v] || { nuovi: 0, utili: 0 }; o.nuovi += y.nuovi; o.utili += y.utili; }
-    if (String(y.utili) !== String(s.hub_utili)) updates.push({ query: s.query, hub_utili: y.utili });
+    for (const [k, v] of [['tipo', s.tipo], ['settore', s.settore], ['luogo', s.luogo], ['coppia', `${s.tipo}|${s.settore}`]]) { const o = stats[k][v] = stats[k][v] || { nuovi: 0, utili: 0 }; o.nuovi += y.nuovi; o.utili += y.utili; }
+    if (String(y.utili) !== String(s.hub_utili) || String(y.nuovi) !== String(s.hub_nuovi)) updates.push({ query: s.query, hub_nuovi: y.nuovi, hub_utili: y.utili });
   }
   st.migliori_tipi = Object.entries(stats.tipo).sort((a, b) => score(b[1]) - score(a[1])).slice(0, 5).map(([k, v]) => `${k} ${v.utili}/${v.nuovi}`);
 
-  // 1-2. domande su Brave, con tetto mensile dedicato alla scoperta
+  // 1-3. domande su Brave, con tetto mensile dedicato
   if (searchEnabled()) {
     const logRows = await read(TABS.log, { columns: ['componente', 'inizio', 'statistiche'] });
     setMonthlyUsed(monthlyUsed(logRows));
@@ -93,39 +143,35 @@ export async function run({ log = console.log } = {}) {
       const res = await webSearch(p.q, { count: 10 });
       st.domande++; st.risultati += res.length;
       let nuovi = 0;
-      for (const x of res) { st.testati++; if (keep(await testAndBuild(x.url, x.title, `scoperta: ${p.q}`, p.t))) nuovi++; }
+      for (const x of res) nuovi += await test(x.url, x.title, `scoperta: ${p.q}`, p.t);
       st.hub_nuovi += nuovi;
-      updates.push({ query: p.q, tipo: p.t, settore: p.s, luogo: p.l, usata_il: today(), risultati: res.length, hub_nuovi: nuovi, hub_utili: 0 });
-      log(`"${p.q}": ${res.length} risultati, ${nuovi} hub nuovi`);
+      updates.push({ query: p.q, tipo: p.t, settore: p.s, luogo: p.l, livello: p.livello, usata_il: today(), risultati: res.length, hub_nuovi: nuovi, hub_utili: 0 });
+      log(`[livello ${p.livello}] "${p.q}": ${res.length} risultati, ${nuovi} hub nuovi`);
     }
   }
 
-  // 3. gratis: link a eventi, programmi e partner dagli hub che rendono di più
-  // ogni hub si esplora al massimo una volta ogni 14 giorni (colonna scoperta_il): il crawler hub gira
-  // a catena, e senza questo rileggerebbe di continuo gli stessi siti
+  // 4. snowball dagli hub che rendono: link esterni a pool, anche dalle pagine partner/eventi/programmi
   const cutoff = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10);
   const best = hubs.filter(h => +h.candidati_da_valutare > 0 && !(String(h.scoperta_il || '') >= cutoff))
     .sort((a, b) => (+b.candidati_da_valutare) - (+a.candidati_da_valutare)).slice(0, 5);
   const explored = [];
-  let checked = 0;
   for (const h of best) {
-    if (checked >= CFG.link_da_hub_per_giro) break;
+    if (!canTest()) break;
     explored.push({ hub_id: h.hub_id, scoperta_il: today() });
-    const r = await getPage(h.url, { jinaFallback: false });
-    if (r.status !== 200) continue;
+    const home = await getPage(h.url, { jinaFallback: false });
+    if (home.status !== 200) continue;
     const own = reg(host(h.url));
-    for (const [tx, l] of links(r.text)) {
-      if (checked >= CFG.link_da_hub_per_giro) break;
-      const hh = host(l); if (!hh || reg(hh) === own || !POOL_LINK.test(l + ' ' + tx)) continue;
-      if (have.has(hubKey(l))) continue;
-      checked++; st.testati++;
-      if (keep(await testAndBuild(l, tx, `scoperta da hub: ${h.nome}`.slice(0, 120), tx))) st.da_link++;
-    }
+    const pages = [home.text];
+    const subs = [...new Set(links(home.text).filter(([tx, l]) => { const hh = host(l); return hh && reg(hh) === own && HUB_SUBPAGE.test(l.replace(/^https?:\/\/[^/]+/, '') + ' ' + tx); }).map(([, l]) => l.replace(/#.*$/, '')))].slice(0, 2);
+    for (const u of subs) { const r = await getPage(u, { jinaFallback: false }); if (r.status === 200) pages.push(r.text); }
+    const origine = `scoperta da hub: ${h.nome}`.slice(0, 120);
+    for (const md of pages) for (const p of poolLinks(h.url, md)) { if (!canTest()) break; st.da_hub += await test(p.url, p.nome, origine, p.nome, 1); }
   }
 
   if (add.length) await upsert(TABS.hub, 'hub_id', add);
   if (explored.length) await upsert(TABS.hub, 'hub_id', explored);
   if (updates.length) await upsert('db_scoperta', 'query', updates);
+  st.hub_aggiunti = add.length;
   st.ricerche_brave = searchStats.ricerche;
   await logRun('scoperta hub', startedAt, st);
   log(JSON.stringify(st));
@@ -135,6 +181,6 @@ export async function run({ log = console.log } = {}) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   process.on('uncaughtException', e => console.error('errore imprevisto ignorato:', e?.message || e));
   run().then(st => {
-    if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `hub_nuovi=${st.hub_nuovi + st.da_link}\n`);
+    if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `hub_nuovi=${st.hub_aggiunti}\n`);
   }).catch(e => { console.error(e); process.exit(1); });
 }

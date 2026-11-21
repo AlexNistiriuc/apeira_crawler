@@ -117,5 +117,12 @@ test('pipeline completa', async () => {
   await startups.run({ deadline, log: quiet });
   const y = (await read('db_hub')).find(r => r.hub_id === 'yesdelft.com');
   assert.equal(y.stato, 'irraggiungibile');
+  // 4. ritentativo mensile: dopo 30 giorni si riprova, con più pazienza
+  await upsert('db_hub', 'hub_id', [{ hub_id: 'yesdelft.com', ultimo_crawl: '2026-09-01 10:00:00' }]);
+  const st4 = await startups.run({ deadline, log: quiet });
+  assert.equal(st4.ritentati, 1);
+  const y2 = (await read('db_hub')).find(r => r.hub_id === 'yesdelft.com');
+  assert.equal(y2.stato, 'irraggiungibile', 'non risponde ancora: resta da parte');
+  assert.ok(y2.ultimo_crawl > '2026-09-01', 'e si riproverà fra un mese');
   assert.equal((await read('db_hub')).find(r => r.hub_id === 'hub-alpha.eu').fallimenti, '0');
 });

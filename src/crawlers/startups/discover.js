@@ -15,10 +15,10 @@ const YEAR = /(?:founded|gegr.ndet|fond.e?|fondata|established|founding year|yea
 /**
  * @returns {Promise<{found: Array<{url,name,year?}>, pages:number, via:string}>}
  */
-export async function discover(hub, { maxSitemapPages = 400, deep = false } = {}) {
+export async function discover(hub, { maxSitemapPages = 400, deep = false, slow = false } = {}) {
   const sm = await fromSitemap(hub, maxSitemapPages);
   if (sm.found.length >= 5) return { ...sm, via: 'sitemap' };
-  const lk = await fromLinks(hub, deep ? 40 : 12);
+  const lk = await fromLinks(hub, deep ? 40 : 12, slow);
   return { found: [...sm.found, ...lk.found], pages: sm.pages + lk.pages, via: 'link' };
 }
 
@@ -67,7 +67,7 @@ async function fromSitemap(hub, max) {
   return { found, pages: per.length };
 }
 
-async function fromLinks(hub, cap0) {
+async function fromLinks(hub, cap0, slow = false) {
   const hr = reg(host(hub.url));
   const seen = new Set(), q = [[hub.url, 0]], found = [];
   let pages = 0, tries = 0, cap = cap0;   // pages = letture riuscite, tries = tentativi
@@ -76,7 +76,7 @@ async function fromLinks(hub, cap0) {
     const key = u.replace(/#.*$/, '').replace(/\/$/, '');
     if (seen.has(key)) continue;
     seen.add(key);
-    const r = await getPage(u);
+    const r = await getPage(u, slow ? { timeoutMs: 45000 } : {});   // ritentativo: più pazienza, Jina compreso
     tries++;
     if (r.status !== 200 || !r.text) continue;
     pages++;
