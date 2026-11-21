@@ -39,6 +39,9 @@ jobs:
         run: |
           gh workflow run crawl-hubs.yml --ref main
           gh workflow run classify-sage.yml --ref main || echo "Sage disattivato: salto"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
       # stima età di CEO e CTO delle migliori (Sage o Claude), con Brave e regole: non dipende da Sage
       - if: always() && steps.crawl.outcome == 'success'
         run: npm run founders -- 100
@@ -46,9 +49,6 @@ jobs:
           SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
           SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
           SEARCH_API_KEY: ${{ secrets.SEARCH_API_KEY }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
       - if: always() && steps.crawl.outcome == 'success'
         run: gh workflow run crawl-startups.yml --ref main
         env:
