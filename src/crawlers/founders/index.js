@@ -50,7 +50,7 @@ export async function run(n = 100, log = console.log) {
   const search = searchEnabled();
   if (search) setMonthlyUsed(monthlyUsed(await read(TABS.log, { columns: ['inizio', 'statistiche'] })));
   else log('SEARCH_API_KEY mancante: solo registri, niente ricerche');
-  const cands = new Map((await read(TABS.cand, { columns: ['dominio', 'nome', 'founder_nomi', 'descrizione', 'hub_origine', 'eta_il', 'fatti_il'] })).map(c => [c.dominio, c]));
+  const cands = new Map((await read(TABS.cand, { columns: ['dominio', 'nome', 'founder_nomi', 'descrizione', 'hub_origine', 'eta_il', 'eta_stimata', 'fatti_il'] })).map(c => [c.dominio, c]));
   const best = pickBest(await read(TABS.eval, { columns: ['dominio', 'classificatore', 'esito', 'fit', 'voto'] }), Infinity)
     .map(v => cands.get(v.dominio)).filter(c => c && !c.fatti_il).slice(0, n);
   st.candidate = best.length;
@@ -71,7 +71,9 @@ export async function run(n = 100, log = console.log) {
     // 2. età dei founder (se il registro non le copre già e non le abbiamo già cercate)
     const covered = n2 => verified.some(v => v.nome.toLowerCase().split(' ').pop() === n2.toLowerCase().split(' ').pop());
     const people = pickPeople(c.founder_nomi).filter(p => !covered(p.nome));
-    if (search && !oldCompany && !c.eta_il) {
+    // il vecchio crawler segnava "non identificati" chi non aveva CEO o CTO: ora si riprova con i founder elencati
+    const ageDone = c.eta_il && !/non identificati/.test(c.eta_stimata || '');
+    if (search && !oldCompany && !ageDone) {
       if (!pickPeople(c.founder_nomi).length) { st.senza_nomi++; row.eta_il = today(); row.eta_stimata = 'CEO e CTO non identificati sul sito'; }
       else if (people.length) {
         const parts = [], fonti = [];
