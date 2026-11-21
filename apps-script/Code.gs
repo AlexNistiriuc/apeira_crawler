@@ -18,7 +18,7 @@
 // Deve coincidere con contracts/schema.json (lo controlla test/apps-script.test.js).
 var SCHEMA = {
   db_hub: { key: 'hub_id', columns: ['hub_id', 'nome', 'url', 'origine', 'tipo', 'stato', 'priorita', 'scoperto_il', 'note', 'ultimo_crawl', 'pagine_lette', 'candidati_trovati', 'candidati_da_valutare', 'cursore', 'fallimenti', 'scoperta_il'] },
-  db_candidati: { key: 'dominio', columns: ['dominio', 'nome', 'sito', 'hub_origine', 'primo_visto', 'ultimo_check', 'stato_crawler', 'motivo', 'dominio_registrato', 'primo_archivio', 'anni_sul_sito', 'settori', 'punteggio_deep', 'europa', 'segnali_funding', 'email', 'linkedin_azienda', 'linkedin_persone', 'founder_nomi', 'team_stima', 'descrizione', 'domanda_reale', 'evidenze', 'pagine_lette', 'versione_crawler', 'snowball_il', 'eta_stimata', 'fonti_eta', 'eta_il'] },
+  db_candidati: { key: 'dominio', columns: ['dominio', 'nome', 'sito', 'hub_origine', 'primo_visto', 'ultimo_check', 'stato_crawler', 'motivo', 'dominio_registrato', 'primo_archivio', 'anni_sul_sito', 'settori', 'punteggio_deep', 'europa', 'segnali_funding', 'email', 'linkedin_azienda', 'linkedin_persone', 'founder_nomi', 'team_stima', 'descrizione', 'domanda_reale', 'evidenze', 'pagine_lette', 'versione_crawler', 'snowball_il', 'eta_stimata', 'fonti_eta', 'eta_il', 'registro', 'eta_verificate', 'notizie_funding', 'fatti_il'] },
   db_valutazioni: { key: 'id', columns: ['id', 'dominio', 'classificatore', 'versione', 'valutato_il', 'esito', 'fit', 'voto', 'motivo', 'fondazione', 'grant', 'investimenti', 'accesso_lab', 'team', 'eta_founder', 'under30', 'domanda_reale', 'da_verificare', 'fonti', 'nota_alex', 'eta_stimata', 'fonti_eta'] },
   db_log: { key: null, columns: ['componente', 'inizio', 'fine', 'statistiche'] },
   db_scoperta: { key: 'query', columns: ['query', 'tipo', 'settore', 'luogo', 'livello', 'usata_il', 'risultati', 'hub_nuovi', 'hub_utili'] }
@@ -291,8 +291,9 @@ var VIEW_COLUMNS = [
 
 /**
  * Ricostruisce il tab Startup trovate: una riga per startup non esclusa, con la valutazione del classificatore che ha la precedenza
- * (proprietà PRECEDENZA, default "sage,claude,euristico"). Con VISTA_RICHIEDE (es. "sage") entrano solo le startup
- * già valutate da quel classificatore. Gira ogni ora. Le note in colonna "Nota Alex" si conservano.
+ * (proprietà PRECEDENZA, default "sage,claude,euristico"). Con VISTA_RICHIEDE (es. "sage,claude") entrano solo le startup
+ * già valutate da almeno uno di quei classificatori: basta un valutatore. Se l'euristico ha escluso la startup dopo
+ * quella valutazione (fatti nuovi dal crawler founder, es. registro imprese), la startup esce subito. Gira ogni ora. Le note in colonna "Nota Alex" si conservano.
  */
 /** Stima d'età di CEO e CTO: più "sotto 30" sale, "35 o più" scende. Serve solo a ordinare. */
 function ageRank_(x) {
@@ -309,12 +310,13 @@ function buildViews_() {
   var configured = props.getProperty('PRECEDENZA') || 'sage,claude,euristico';
   var order = configured.split(',');
   if (order.indexOf('sage') < 0) order.unshift('sage'); // migra automaticamente la vecchia precedenza
-  // VISTA_RICHIEDE: in Startup trovate entrano solo le startup valutate da questo classificatore
-  // (default "sage": prima l'euristico, poi Sage, poi la vista). Vuoto = qualunque valutatore.
-  var required = props.getProperty('VISTA_RICHIEDE') || '';   // si accende con VISTA_RICHIEDE = sage
-  var best = {};
+  // VISTA_RICHIEDE: in Startup trovate entrano solo le startup valutate da uno di questi classificatori,
+  // separati da virgola (es. "sage,claude": basta uno dei due). Vuoto = qualunque valutatore.
+  var required = String(props.getProperty('VISTA_RICHIEDE') || '').split(',').map(function (x) { return x.trim(); }).filter(String);
+  var best = {}, heur = {};
   readRows_('db_valutazioni', null).forEach(function (v) {
-    if (required && v.classificatore !== required) return;
+    if (v.classificatore === 'euristico') heur[v.dominio] = v;
+    if (required.length && required.indexOf(v.classificatore) < 0) return;
     var p = order.indexOf(v.classificatore); if (p < 0) p = order.length;
     var cur = best[v.dominio];
     if (!cur || p < cur._p) { v._p = p; best[v.dominio] = v; }
@@ -325,7 +327,11 @@ function buildViews_() {
   readRows_('db_hub', ['nome', 'url']).forEach(function (h) { hubUrl[h.nome] = h.url; });
   var rows = readRows_('db_candidati', CCOLS, { stato_crawler: 'da_valutare' }).map(function (c) {
     return { c: c, v: best[c.dominio] };
-  }).filter(function (x) { return x.v && x.v.esito !== 'Esclusa'; });
+  }).filter(function (x) {
+    if (!x.v || x.v.esito === 'Esclusa') return false;
+    var h = heur[x.c.dominio];   // fatti nuovi: l'euristico ha escluso dopo il valutatore
+    return !(h && h.esito === 'Esclusa' && String(h.valutato_il) > String(x.v.valutato_il));
+  });
   rows.sort(function (a, b) {
     var ra = rank[a.v.esito] * 2 + (a.v.under30 === 'sì' ? 0 : 1), rb = rank[b.v.esito] * 2 + (b.v.under30 === 'sì' ? 0 : 1);
     return ra - rb || frank[a.v.fit] - frank[b.v.fit] || ageRank_(b) - ageRank_(a) || Number(b.v.voto) - Number(a.v.voto);

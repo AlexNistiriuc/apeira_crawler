@@ -20,6 +20,11 @@ dopo l'ultima valutazione. Ogni riga ha tutte le colonne di `db_candidati`. Le p
 | `team_stima`, `domanda_reale` | indizi già leggibili |
 | `evidenze` | JSON con tutto il resto (sotto) |
 | `pagine_lette` | URL delle pagine lette dal crawler, per verificare |
+| `eta_stimata`, `fonti_eta` | stima d'età di CEO e CTO (crawler founder): ordina, non esclude |
+| `eta_verificate` | JSON `[{nome, ruolo, min, max, fonte, url}]`: età da registro imprese (FR, UK) o dichiarata in una fonte con nome e cognome. Conta come verificata |
+| `registro` | JSON dal registro imprese (FR, UK): `costituita`, `aumenti_capitale` (SH01 UK), `persone` con età, `url` |
+| `notizie_funding` | JSON `[{title, url, snippet}]`: una ricerca Brave del crawler founder, da riusare senza ripagarla |
+| `fatti_il` | data in cui il crawler founder ha raccolto questi fatti |
 
 `evidenze` (JSON, versione 2):
 
@@ -49,7 +54,7 @@ Una riga in `db_valutazioni`, chiave `id = dominio|classificatore`. Obbligatori:
 | `voto` | 0-100 |
 | `motivo` | perché, in una frase |
 | `fondazione`, `grant`, `investimenti`, `accesso_lab`, `team`, `eta_founder` | evidenza per ciascun criterio, con la fonte |
-| `under30` | `sì` solo se l'età di tutti i founder è dichiarata pubblicamente e sotto 30 |
+| `under30` | `sì` solo se l'età di tutti i founder è verificata (dichiarata pubblicamente o da registro imprese) e sotto 30 |
 | `domanda_reale` | clienti, pilot, ricavi trovati |
 | `da_verificare` | cosa manca per qualificarla |
 | `fonti` | URL usati |

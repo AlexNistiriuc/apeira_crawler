@@ -27,7 +27,15 @@ Il crawler non dà voti: scarta solo ciò che è certo (round già chiuso, fonda
 azienda grande, investitore, non deep tech, dominio vecchio) e passa tutto il resto ai classificatori
 con le evidenze. Così si può cambiare modello di classificazione senza toccare i crawler.
 
-Solo le startup valutate da Sage entrano in **Startup trovate** (proprietà di script `VISTA_RICHIEDE`, default `sage`).
+In **Startup trovate** entrano le startup valutate da uno dei valutatori elencati nella proprietà di script
+`VISTA_RICHIEDE` (es. `sage,claude`: basta uno dei due). Se dopo la valutazione l'euristico le esclude per fatti
+nuovi (registro imprese, età verificate, notizie di round), escono subito.
+
+**Crawler founder** (`npm run founders`, dopo l'euristico): per le startup migliori raccoglie una volta sola
+registro imprese (Francia gratis; Regno Unito con il secret `COMPANIES_HOUSE_KEY`, chiave gratuita di Companies House),
+età dei founder e notizie di funding. Le età da registro o dichiarate con nome e cognome sono verificate e possono
+escludere (35 anni o più); le stime ordinano soltanto. Le notizie salvate le riusano Sage e Claude senza nuove ricerche.
+Portfolio VC: nota e penalità, non esclusione.
 
 **Fermare tutto lo scouting:** Settings > Secrets and variables > Actions > Variables, crea la variabile
 `SCOUTING_ATTIVO` con valore `no`. I giri in corso finiscono, i successivi non partono. Per ripartire cancellala.
