@@ -18,7 +18,7 @@
 // Deve coincidere con contracts/schema.json (lo controlla test/apps-script.test.js).
 var SCHEMA = {
   db_hub: { key: 'hub_id', columns: ['hub_id', 'nome', 'url', 'origine', 'tipo', 'stato', 'priorita', 'scoperto_il', 'note', 'ultimo_crawl', 'pagine_lette', 'candidati_trovati', 'candidati_da_valutare', 'cursore', 'fallimenti', 'scoperta_il'] },
-  db_candidati: { key: 'dominio', columns: ['dominio', 'nome', 'sito', 'hub_origine', 'primo_visto', 'ultimo_check', 'stato_crawler', 'motivo', 'dominio_registrato', 'primo_archivio', 'anni_sul_sito', 'settori', 'punteggio_deep', 'europa', 'segnali_funding', 'email', 'linkedin_azienda', 'linkedin_persone', 'founder_nomi', 'team_stima', 'descrizione', 'domanda_reale', 'evidenze', 'pagine_lette', 'versione_crawler', 'snowball_il', 'eta_stimata', 'fonti_eta', 'eta_il', 'registro', 'eta_verificate', 'notizie_funding', 'fatti_il'] },
+  db_candidati: { key: 'dominio', columns: ['dominio', 'nome', 'sito', 'hub_origine', 'primo_visto', 'ultimo_check', 'stato_crawler', 'motivo', 'dominio_registrato', 'primo_archivio', 'anni_sul_sito', 'settori', 'punteggio_deep', 'europa', 'segnali_funding', 'email', 'linkedin_azienda', 'linkedin_persone', 'founder_nomi', 'team_stima', 'descrizione', 'domanda_reale', 'evidenze', 'pagine_lette', 'versione_crawler', 'snowball_il', 'eta_stimata', 'fonti_eta', 'eta_il', 'registro', 'eta_verificate', 'notizie_funding', 'fatti_il', 'round_notizie'] },
   db_valutazioni: { key: 'id', columns: ['id', 'dominio', 'classificatore', 'versione', 'valutato_il', 'esito', 'fit', 'voto', 'motivo', 'fondazione', 'grant', 'investimenti', 'accesso_lab', 'team', 'eta_founder', 'under30', 'domanda_reale', 'da_verificare', 'fonti', 'nota_alex', 'eta_stimata', 'fonti_eta'] },
   db_log: { key: null, columns: ['componente', 'inizio', 'fine', 'statistiche'] },
   db_scoperta: { key: 'query', columns: ['query', 'tipo', 'settore', 'luogo', 'livello', 'usata_il', 'risultati', 'hub_nuovi', 'hub_utili'] }
@@ -287,7 +287,7 @@ var VIEW_COLUMNS = [
   'Email', 'LinkedIn azienda', 'LinkedIn founder', 'Founder (nomi)', 'Età founder (stima)', 'Pool di provenienza', 'Link pool', 'Descrizione',
   // nuove, dalla valutazione
   'Esito criteri rigidi', 'Voto', 'Motivo', 'Valutata da', 'Fondazione', 'Grant', 'Investimenti esterni', 'Accesso lab', 'Team',
-  'Domanda reale', 'Da verificare', 'Nota Alex', 'Età CEO/CTO (stima)', 'Fonti età'];
+  'Domanda reale', 'Da verificare', 'Nota Alex', 'Età CEO/CTO (stima)', 'Fonti età', 'Round nelle notizie'];
 
 /**
  * Ricostruisce il tab Startup trovate: una riga per startup non esclusa, con la valutazione del classificatore che ha la precedenza
@@ -322,7 +322,7 @@ function buildViews_() {
     if (!cur || p < cur._p) { v._p = p; best[v.dominio] = v; }
   });
   var rank = { 'Qualificata': 0, 'Needs verification': 1 }, frank = { Alto: 0, Medio: 1, Basso: 2 };
-  var CCOLS = ['dominio', 'nome', 'sito', 'settori', 'europa', 'email', 'linkedin_azienda', 'linkedin_persone', 'founder_nomi', 'hub_origine', 'descrizione', 'stato_crawler', 'segnali_funding', 'dominio_registrato', 'primo_archivio', 'anni_sul_sito', 'eta_stimata', 'fonti_eta'];
+  var CCOLS = ['dominio', 'nome', 'sito', 'settori', 'europa', 'email', 'linkedin_azienda', 'linkedin_persone', 'founder_nomi', 'hub_origine', 'descrizione', 'stato_crawler', 'segnali_funding', 'dominio_registrato', 'primo_archivio', 'anni_sul_sito', 'eta_stimata', 'fonti_eta', 'round_notizie'];
   var hubUrl = {};
   readRows_('db_hub', ['nome', 'url']).forEach(function (h) { hubUrl[h.nome] = h.url; });
   var rows = readRows_('db_candidati', CCOLS, { stato_crawler: 'da_valutare' }).map(function (c) {
@@ -355,7 +355,7 @@ function buildViews_() {
       c.email, c.linkedin_azienda, c.linkedin_persone, c.founder_nomi, v.eta_founder, hubs.join(' ; '),
       hubs.map(function (h) { return hubUrl[h] || ''; }).filter(String).join(' ; '), c.descrizione,
       v.esito, v.voto, v.motivo, v.classificatore + ' ' + v.versione, v.fondazione, v.grant, v.investimenti, v.accesso_lab, v.team,
-      v.domanda_reale, v.da_verificare, v.nota_alex, c.eta_stimata || v.eta_stimata, c.fonti_eta || v.fonti_eta].map(cell_);
+      v.domanda_reale, v.da_verificare, v.nota_alex, c.eta_stimata || v.eta_stimata, c.fonti_eta || v.fonti_eta, c.round_notizie || ''].map(cell_);
   });
   sh.clearContents();
   if (sh.getMaxColumns() < VIEW_COLUMNS.length) sh.insertColumnsAfter(sh.getMaxColumns(), VIEW_COLUMNS.length - sh.getMaxColumns());

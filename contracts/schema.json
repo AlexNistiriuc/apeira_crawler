@@ -25,7 +25,7 @@
     },
     "db_candidati": {
       "key": "dominio",
-      "owner": "crawler startup (tutte tranne snowball_il e le colonne dei fatti), crawler hub (snowball_il), crawler founder (eta_stimata, fonti_eta, eta_il, registro, eta_verificate, notizie_funding, fatti_il; ultimo_check quando trova fatti decisivi)",
+      "owner": "crawler startup (tutte tranne snowball_il e le colonne dei fatti), crawler hub (snowball_il), crawler founder (eta_stimata, fonti_eta, eta_il, registro, eta_verificate, notizie_funding, round_notizie, fatti_il; ultimo_check quando trova fatti decisivi)",
       "columns": [
         "dominio",
         "nome",
@@ -59,7 +59,8 @@
         "registro",
         "eta_verificate",
         "notizie_funding",
-        "fatti_il"
+        "fatti_il",
+        "round_notizie"
       ]
     },
     "db_valutazioni": {

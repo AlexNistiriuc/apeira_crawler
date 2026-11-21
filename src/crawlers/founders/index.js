@@ -14,7 +14,7 @@ import { now, today } from '../../lib/config.js';
 import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed } from '../../lib/search.js';
 import { registryLookup, registryStats } from '../../lib/registry.js';
 import { estimateAge } from '../../signals/age.estimate.js';
-import { pickPeople, verifiedFromEstimate, registryFounders, newsFunding, companyName } from '../../signals/facts.js';
+import { pickPeople, verifiedFromEstimate, registryFounders, newsFunding, companyName, parseJson } from '../../signals/facts.js';
 
 const FIT = { Alto: 0, Medio: 1, Basso: 2 };
 const PREC = { sage: 0, claude: 1, euristico: 2 };
@@ -50,7 +50,15 @@ export async function run(n = 100, log = console.log) {
   const search = searchEnabled();
   if (search) setMonthlyUsed(monthlyUsed(await read(TABS.log, { columns: ['inizio', 'statistiche'] })));
   else log('SEARCH_API_KEY mancante: solo registri, niente ricerche');
-  const cands = new Map((await read(TABS.cand, { columns: ['dominio', 'nome', 'founder_nomi', 'descrizione', 'hub_origine', 'eta_il', 'eta_stimata', 'fatti_il'] })).map(c => [c.dominio, c]));
+  const all = await read(TABS.cand, { columns: ['dominio', 'nome', 'founder_nomi', 'descrizione', 'hub_origine', 'eta_il', 'eta_stimata', 'fatti_il', 'notizie_funding', 'round_notizie'] });
+  // riassunto dei round per chi ha già le notizie salvate (nessuna ricerca): lo vede la vista e l'agente di outreach
+  const back = all.filter(c => c.notizie_funding && !c.round_notizie).map(c => {
+    const news = parseJson(c.notizie_funding, []) || [];
+    const f = newsFunding(news, companyName(c), c.dominio);
+    return { dominio: c.dominio, round_notizie: f.riassunto || (news.length ? 'nessun importo' : 'nessuna notizia'), ultimo_check: now() };
+  });
+  if (back.length) { await upsert(TABS.cand, 'dominio', back); st.riassunti_recuperati = back.length; }
+  const cands = new Map(all.map(c => [c.dominio, c]));
   const best = pickBest(await read(TABS.eval, { columns: ['dominio', 'classificatore', 'esito', 'fit', 'voto'] }), Infinity)
     .map(v => cands.get(v.dominio)).filter(c => c && !c.fatti_il).slice(0, n);
   st.candidate = best.length;
@@ -100,7 +108,8 @@ export async function run(n = 100, log = console.log) {
       row.notizie_funding = JSON.stringify(news);
       if (news.length) st.notizie++;
       const f = newsFunding(news, companyName(c), c.dominio);
-      if (f.investimenti.length || f.grant.length || f.fase) decisive = true;
+      row.round_notizie = f.riassunto || (news.length ? 'nessun importo' : 'nessuna notizia');
+      if (f.investimenti.length || f.grant.length || f.fase || f.team) decisive = true;
     }
     if (decisive) { st.fatti_decisivi++; row.ultimo_check = now(); }
     if (!search) delete row.fatti_il; // senza Brave si riprova al prossimo giro (i registri sono gratis)

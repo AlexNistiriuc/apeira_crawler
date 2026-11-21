@@ -55,13 +55,14 @@ export function analyze(t) {
   const lco = (t.match(/linkedin\.com\/company\/[A-Za-z0-9\-_%]+/g) || []).map(x => 'https://www.' + x);
 
   const fn = new Set();
-  const fre = /([A-ZÀ-Ý][a-zà-ÿ'\-]{1,20}(?:\s[A-ZÀ-Ý][a-zà-ÿ'\-]{1,25}){1,2})\s*(?:[,|\-–—:·]\s*|\n+|\s+)(Co-?\s?[Ff]ounder|CO-?FOUNDER|[Ff]ounder|FOUNDER|CEO|CTO|Chief Executive|Chief Technology|Geschäftsführer)/g;
+  const fre = /([A-ZÀ-Ý][a-zà-ÿ'\-]{1,20}(?:[ \t][A-ZÀ-Ý][a-zà-ÿ'\-]{1,25}){1,2})\s*(?:[,|\-–—:·]\s*|\n+|\s+)(Co-?\s?[Ff]ounder|CO-?FOUNDER|[Ff]ounder|FOUNDER|CEO|CTO|Chief Executive|Chief Technology|Geschäftsführer)/g;
   // il ruolo resta accanto al nome ("Anna Rossi (CEO)"): serve a stimare l'età di CEO e CTO
   const ROLE = r => /CEO|Chief Executive|Geschäftsführer/i.test(r) ? 'CEO' : /CTO|Chief Technology/i.test(r) ? 'CTO' : 'co-founder';
   const byName = new Map();
   while ((m = fre.exec(t)) && byName.size < 5) {
     const nm = m[1].trim(); if (/^(The|Our|Meet|About|Team|Contact|Join|Read|Learn|Co|Founder)\b/.test(nm)) continue;
-    const r = ROLE(m[2]); const prev = byName.get(nm);
+    // "Co-founder & CEO": il ruolo vero può stare subito dopo
+    const r = ROLE(m[2] + ' ' + t.slice(fre.lastIndex, fre.lastIndex + 20).split('\n')[0]); const prev = byName.get(nm);
     if (!prev || prev === 'co-founder') byName.set(nm, r);
   }
   for (const [nm, r] of byName) fn.add(r === 'co-founder' ? nm : `${nm} (${r})`);
@@ -78,6 +79,8 @@ export function fundSig(t) {
   if (/\bseries [a-d]\b/i.test(T)) { l = 3; x.push('Series'); }
   if (/(?<!pre-?)\bseed (round|funding|investment|financing)\b/i.test(T)) { l = Math.max(l, 2); x.push('seed'); }
   if (/\bpre-?seed\b/i.test(T)) { l = Math.max(l, 1); x.push('pre-seed'); }
+  // "Backed by", "Backed and advised by", "our investors": investitori dichiarati sul sito, probabile round già fatto
+  if (/\b(backed (and advised )?by|our investors|investors include|funded by (?!the european|horizon|eic|the eu))/i.test(T)) { l = Math.max(l, 1); x.push('backed by'); }
   const re = /(rais\w*|secur\w*|clos\w*|funding|round|invest\w*|financ\w*)[^.\n]{0,60}?(?:([€$£])\s?(\d+(?:[.,]\d+)?)\s?(m|mn|million|mio|k|thousand|b|bn|billion)?\b|(\d+(?:[.,]\d+)?)\s?(m|mn|million|mio|k)\.?\s?(€|eur|euro|usd|\$|£|dollars|pounds|chf))/gi;
   let m;
   while ((m = re.exec(T))) {

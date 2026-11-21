@@ -54,6 +54,7 @@ function sageResponse(outcome, probability, fit = 'high', score = 88, sources = 
 }
 
 const candidate = {
+  fatti_il: "2026-11-21",
   dominio: 'qubo.ai', nome: 'Qubo', sito: 'https://qubo.ai/', settori: 'Quantum', europa: 'sì',
   dominio_registrato: '2025-02-10', primo_archivio: '2025-03-01', anni_sul_sito: '2025',
   team_stima: '3 (dichiarato sul sito)', email: 'founder@qubo.ai', pagine_lette: 'https://qubo.ai/about',

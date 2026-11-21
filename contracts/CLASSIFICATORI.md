@@ -25,6 +25,13 @@ dopo l'ultima valutazione. Ogni riga ha tutte le colonne di `db_candidati`. Le p
 | `registro` | JSON dal registro imprese (FR, UK): `costituita`, `aumenti_capitale` (SH01 UK), `persone` con età, `url` |
 | `notizie_funding` | JSON `[{title, url, snippet}]`: una ricerca Brave del crawler founder, da riusare senza ripagarla |
 | `fatti_il` | data in cui il crawler founder ha raccolto questi fatti |
+| `round_notizie` | riassunto dei round e grant trovati nelle notizie (es. "EUR 3.5M (aventure.vc) · pre-seed"); lo mostra la vista |
+
+### Regole per i valutatori (Sage e Claude)
+- Si valuta solo dopo il crawler founder (`fatti_il` presente). Senza fatti niente fit Alto.
+- Si leggono sempre il testo delle pagine (`evidenze.estratto_home`, `estratto_team`) e le notizie salvate (`notizie_funding`), non solo i campi riassunti.
+- "Backed by", loghi di investitori o una pagina su un database di funding con il nome della startup sono segnali di round: da verificare e fit giù; se l'importo supera la soglia, esclusa.
+- Se manca un dato, lo si chiede ai crawler (nuova raccolta del crawler founder), non si cerca da soli sul web.
 
 `evidenze` (JSON, versione 2):
 

@@ -406,7 +406,8 @@ export default {
     const sage = response.decisions;
     const gate = sage.soglia?.chosen;
     const esito = safeOutcome(sage.esito, baseline, gate);
-    const fit = FIT_TO_SHEET[sage.fit.chosen] || baseline.fit;
+    let fit = FIT_TO_SHEET[sage.fit.chosen] || baseline.fit;
+    if (fit === 'Alto' && !c.fatti_il) fit = 'Medio';   // senza i fatti del crawler founder (round, età, registro) niente Alto
     const voto = safeScore(sage.voto.expectation, esito);
     const downgraded = sage.esito.chosen === 'qualified' && esito !== 'Qualificata';
     const sageExcluded = esito === 'Esclusa' && baseline.esito !== 'Esclusa';

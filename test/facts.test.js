@@ -121,3 +121,25 @@ test('euristico: una sola notizia senza dominio non esclude, abbassa e chiede co
   assert.equal(one.esito, 'Needs verification');
   assert.match(one.motivo, /da confermare che sia la stessa azienda/);
 });
+
+test('Saturn Dynamics: round in snippet incollato e pagina dedicata, nomi con a capo, "backed by"', async () => {
+  const { urlIsAbout, confirmedOver, pickPeople } = await import('../src/signals/facts.js');
+  const { fundSig } = await import('../src/signals/scan.js');
+  const news = [
+    { url: 'https://aventure.vc/companies/saturn-dynamics-london-gb/fundraising', title: 'Saturn Dynamics Funding History, Valuation and Investors - aVenture', snippet: 'Last Deal Details€3.5 millionPre-Seed · Saturn Dynamics has raised money from at least 1 investor as of October 24, 2026' },
+    { url: 'https://www.angelsround.com/p/saturndynamics', title: 'Saturn Dynamics: World Models for Robotics - AngelsRound', snippet: 'Funding: Raised $1M (Seed) Traction: Atlas shipped in April 2026 with a five person team' },
+  ];
+  assert.ok(urlIsAbout(news[0].url, 'Saturn Dynamics', 'saturndynamics.com'));
+  assert.ok(urlIsAbout(news[1].url, 'Saturn Dynamics', 'saturndynamics.com'));
+  assert.equal(urlIsAbout('https://tracxn.com/d/companies/iris-labs/x', 'Iris Lab', 'irislab.io'), false, 'omonimo con la s finale');
+  const f = newsFunding(news, 'Saturn Dynamics', 'saturndynamics.com');
+  assert.equal(f.inv_usd, 3850000);
+  assert.ok(confirmedOver(f.investimenti, 500000));
+  assert.equal(f.team, 5);
+  assert.match(f.riassunto, /EUR 3\.5M \(aventure\.vc\)/);
+  const e = await euristico.classify({ ...base, dominio: 'saturndynamics.com', nome: 'Saturn Dynamics', notizie_funding: JSON.stringify(news) });
+  assert.equal(e.esito, 'Esclusa');
+  assert.deepEqual(pickPeople('Elisa Seghetti\nCo, Simone Totaro\nCo').map(p => p.nome), ['Elisa Seghetti', 'Simone Totaro']);
+  assert.equal(fundSig('Backed and advised by Industry leaders').l, 1);
+  assert.equal(fundSig('Funded by the European Union').l, 0);
+});

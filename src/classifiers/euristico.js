@@ -63,6 +63,7 @@ export default {
     else if (nf.fase === 'seed' && !nf.investimenti.length) { note.push('notizie di un seed senza importo'); ver.push('importo del seed'); phaseDown++; }
     else if (nf.fase === 'pre-seed' && !nf.investimenti.length) { note.push('notizie di un pre-seed senza importo'); phaseDown++; }
     if (nf.investimenti.length && nf.inv_usd <= C.max_outside_investment_usd) phaseDown++;
+    if (nf.team > C.max_team_size) { note.push(`team di ${nf.team} persone secondo le notizie`); ver.push('team (notizie)'); phaseDown++; }
     if (reg?.aumenti_capitale?.length) { note.push(`aumenti di capitale nel registro UK: ${reg.aumenti_capitale.slice(0, 3).join(', ')}`); phaseDown++; }
     const vcHubs = String(c.hub_origine || '').split(', ').filter(h => h && VCH.test(h) && !NOT_VC.test(h));
     if (vcHubs.length) { note.push(`in portfolio VC (${vcHubs.slice(0, 2).join(', ')}): probabilmente ha già fatto un round`); phaseDown++; }
