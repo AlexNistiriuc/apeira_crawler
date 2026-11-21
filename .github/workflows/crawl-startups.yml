@@ -43,11 +43,12 @@ jobs:
           GH_REPO: ${{ github.repository }}
       # stima età di CEO e CTO delle migliori (Sage o Claude), con Brave e regole: non dipende da Sage
       - if: always() && steps.crawl.outcome == 'success'
-        run: npm run founders -- 100
+        run: npm run founders -- 40
         env:
           SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
           SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
           SEARCH_API_KEY: ${{ secrets.SEARCH_API_KEY }}
+          COMPANIES_HOUSE_KEY: ${{ secrets.COMPANIES_HOUSE_KEY }}
       - if: always() && steps.crawl.outcome == 'success'
         run: gh workflow run crawl-startups.yml --ref main
         env:

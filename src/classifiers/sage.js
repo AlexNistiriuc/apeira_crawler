@@ -16,6 +16,8 @@ import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed } fr
 import { read, TABS } from '../lib/sheet.js';
 import { CRITERIA as C } from '../lib/config.js';
 import euristico from './euristico.js';
+import { parseJson } from '../signals/facts.js';
+import { fundingNews } from '../crawlers/founders/index.js';
 
 const DEFAULT_URL = 'https://sage.levanto.ai';
 const MIN_QUALIFY_PROBABILITY = 0.85;
@@ -107,6 +109,8 @@ function candidateContent(c, baseline, webResearch = [], site = null) {
     deep_tech: { score: ev.deep, negative_score: ev.neg, strong_signals: ev.strong, tags: ev.tags },
     page_extracts: site && site.length ? site : { home: trim(ev.estratto_home, 3000), team: trim(ev.estratto_team, 2000) },
     founder_age_estimate_from_crawler: c.eta_stimata || 'not estimated',
+    verified_founder_ages_from_crawler: parseJson(c.eta_verificate, []),
+    company_registry_from_crawler: parseJson(c.registro) || 'not found or not checked',
     deterministic_check: baseline,
     web_research: webResearch,
     sources: trim(c.pagine_lette || c.sito, 1500),
@@ -117,7 +121,8 @@ function candidateContent(c, baseline, webResearch = [], site = null) {
     rules: [
       'Use only the supplied evidence. Do not assume missing facts.',
       'Not disclosed is unknown, never zero.',
-      'Founder age counts only when publicly stated; estimates, photos and graduation years do not verify age.',
+      'Founder age counts only when publicly stated or taken from an official company registry (verified_founder_ages_from_crawler); estimates, photos and graduation years do not verify age.',
+      'An official registry incorporation date beats years on the website. A UK capital increase (SH01) or a VC portfolio listing suggests a round already happened: note it and lower fit and score, do not exclude for it alone.',
       'Use the supplied web research only for this exact startup. Prefer first-party pages, filings and credible press; ignore namesakes and generic startup-advice pages.',
       'LinkedIn may be checked only through public search-result snippets or LinkedIn links already published on the startup website. Never open or scrape linkedin.com.',
       'LinkedIn career history and headcount ranges are discovery hints only. They never verify founder age or exact team size.',
@@ -350,14 +355,12 @@ export async function readSite(c) {
   return pages.filter(p => (total += p.text.length) <= SITE_MAX_CHARS);
 }
 
-/** Notizie di funding e premi: una ricerca Brave del crawler, filtrata sul dominio o sul nome. */
+/** Notizie di funding e premi: quelle già salvate dal crawler founder; se mancano, la stessa ricerca Brave. */
 async function pressSearch(c) {
+  const saved = parseJson(c.notizie_funding);
+  if (Array.isArray(saved)) return saved;
   if (!searchEnabled()) return [];
-  const name = c.nome || c.dominio;
-  const res = await webSearch(`"${name}" funding OR raises OR "pre-seed" OR seed OR grant OR award`);
-  const dom = String(c.dominio || '').toLowerCase(), nm = String(name).toLowerCase();
-  return res.filter(x => { const h = `${x.url} ${x.title} ${x.snippet}`.toLowerCase(); return h.includes(dom) || (nm.length > 4 && h.includes(nm)); })
-    .slice(0, 6).map(x => ({ title: trim(x.title, 200), url: x.url, snippet: trim(x.snippet, 1200) }));
+  return fundingNews(c);
 }
 
 function wantsFull(baseline) {
