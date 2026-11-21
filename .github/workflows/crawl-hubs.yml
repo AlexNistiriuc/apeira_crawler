@@ -1,28 +1,43 @@
 name: crawler hub
 on:
   schedule:
-    - cron: '0 4 * * *'        # riserva: parte già alla fine di ogni giro del crawler startup
+    - cron: '30 * * * *'       # riserva: la catena qui sotto lo fa già ripartire da solo
   workflow_dispatch:
+# Indipendente dal crawler startup: gira a catena per conto suo, così uno non blocca l'altro.
 concurrency: { group: crawler-hub, cancel-in-progress: false }
+permissions:
+  contents: read
+  actions: write   # solo per far ripartire il giro successivo
 jobs:
   run:
     if: vars.SCOUTING_ATTIVO != 'no'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: npm }
       - run: npm ci
-      - run: npm run hubs
+      - id: hubs
+        run: npm run hubs
         env:
           SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
           SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
           RUN_MINUTES: 15
       # scoperta continua di pool nuovi: ricerche Brave (tetto dedicato) + link da eventi e programmi degli hub migliori
-      - if: always()
+      - id: discovery
+        if: always()
         run: npm run discovery
         env:
           SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
           SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
           SEARCH_API_KEY: ${{ secrets.SEARCH_API_KEY }}
+      # catena: riparte da solo. Se il giro non ha trovato hub nuovi aspetta 10 minuti prima di ripartire,
+      # così non rilegge di continuo gli stessi siti (minuti di Actions gratuiti: il repo è pubblico).
+      - if: always() && steps.hubs.outcome == 'success'
+        run: |
+          if [ "${{ steps.discovery.outputs.hub_nuovi }}" = "0" ]; then sleep 600; fi
+          gh workflow run crawl-hubs.yml --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}

@@ -19,7 +19,8 @@
         "candidati_trovati",
         "candidati_da_valutare",
         "cursore",
-        "fallimenti"
+        "fallimenti",
+        "scoperta_il"
       ]
     },
     "db_candidati": {

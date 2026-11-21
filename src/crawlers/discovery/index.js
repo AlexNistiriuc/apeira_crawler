@@ -6,7 +6,7 @@
 //  4. testa ogni pagina trovata: deve sembrare un pool (molti link a siti esterni + parole da pool);
 //  5. aggiunge gli hub buoni in db_hub e registra ogni domanda in db_scoperta, con la sua resa.
 // Uso: npm run discovery
-import { readFileSync } from 'node:fs';
+import { readFileSync, appendFileSync } from 'node:fs';
 import { read, upsert, logRun, TABS } from '../../lib/sheet.js';
 import { getPage } from '../../lib/http.js';
 import { host, reg, bad, links, hubKey } from '../../lib/url.js';
@@ -64,7 +64,7 @@ async function testAndBuild(url, name, origine, pattern) {
 export async function run({ log = console.log } = {}) {
   const startedAt = now();
   const st = { domande: 0, risultati: 0, testati: 0, hub_nuovi: 0, da_link: 0 };
-  const hubs = await read(TABS.hub, { columns: ['hub_id', 'nome', 'url', 'origine', 'candidati_trovati', 'candidati_da_valutare'] });
+  const hubs = await read(TABS.hub, { columns: ['hub_id', 'nome', 'url', 'origine', 'candidati_trovati', 'candidati_da_valutare', 'scoperta_il'] });
   const have = new Set(hubs.map(h => h.hub_id));
   const add = [];
   const keep = row => { if (row && row.hub_id && !have.has(row.hub_id)) { have.add(row.hub_id); add.push(row); return true; } return false; };
@@ -101,10 +101,16 @@ export async function run({ log = console.log } = {}) {
   }
 
   // 3. gratis: link a eventi, programmi e partner dagli hub che rendono di più
-  const best = hubs.filter(h => +h.candidati_da_valutare > 0).sort((a, b) => (+b.candidati_da_valutare) - (+a.candidati_da_valutare)).slice(0, 25);
+  // ogni hub si esplora al massimo una volta ogni 14 giorni (colonna scoperta_il): il crawler hub gira
+  // a catena, e senza questo rileggerebbe di continuo gli stessi siti
+  const cutoff = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10);
+  const best = hubs.filter(h => +h.candidati_da_valutare > 0 && !(String(h.scoperta_il || '') >= cutoff))
+    .sort((a, b) => (+b.candidati_da_valutare) - (+a.candidati_da_valutare)).slice(0, 5);
+  const explored = [];
   let checked = 0;
   for (const h of best) {
     if (checked >= CFG.link_da_hub_per_giro) break;
+    explored.push({ hub_id: h.hub_id, scoperta_il: today() });
     const r = await getPage(h.url, { jinaFallback: false });
     if (r.status !== 200) continue;
     const own = reg(host(h.url));
@@ -118,6 +124,7 @@ export async function run({ log = console.log } = {}) {
   }
 
   if (add.length) await upsert(TABS.hub, 'hub_id', add);
+  if (explored.length) await upsert(TABS.hub, 'hub_id', explored);
   if (updates.length) await upsert('db_scoperta', 'query', updates);
   st.ricerche_brave = searchStats.ricerche;
   await logRun('scoperta hub', startedAt, st);
@@ -127,5 +134,7 @@ export async function run({ log = console.log } = {}) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   process.on('uncaughtException', e => console.error('errore imprevisto ignorato:', e?.message || e));
-  run().catch(e => { console.error(e); process.exit(1); });
+  run().then(st => {
+    if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `hub_nuovi=${st.hub_nuovi + st.da_link}\n`);
+  }).catch(e => { console.error(e); process.exit(1); });
 }

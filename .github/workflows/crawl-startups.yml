@@ -34,10 +34,9 @@ jobs:
       # catena: appena finisce un giro riuscito ne parte un altro, così il crawler lavora senza sosta
       # (il cron orario resta come rete di sicurezza: GitHub a volte salta o ritarda gli orari programmati).
       # Si ferma da sola se il crawler fallisce, così un errore non brucia minuti in un ciclo veloce.
-      # candidati nuovi: Sage li valuta e il crawler hub fa lo snowball dai loro siti
+      # candidati nuovi: Sage li valuta (il crawler hub gira per conto suo e li usa per lo snowball)
       - if: always() && steps.crawl.outcome == 'success'
         run: |
-          gh workflow run crawl-hubs.yml --ref main
           gh workflow run classify-sage.yml --ref main || echo "Sage disattivato: salto"
         env:
           GH_TOKEN: ${{ github.token }}

@@ -17,7 +17,7 @@
 
 // Deve coincidere con contracts/schema.json (lo controlla test/apps-script.test.js).
 var SCHEMA = {
-  db_hub: { key: 'hub_id', columns: ['hub_id', 'nome', 'url', 'origine', 'tipo', 'stato', 'priorita', 'scoperto_il', 'note', 'ultimo_crawl', 'pagine_lette', 'candidati_trovati', 'candidati_da_valutare', 'cursore', 'fallimenti'] },
+  db_hub: { key: 'hub_id', columns: ['hub_id', 'nome', 'url', 'origine', 'tipo', 'stato', 'priorita', 'scoperto_il', 'note', 'ultimo_crawl', 'pagine_lette', 'candidati_trovati', 'candidati_da_valutare', 'cursore', 'fallimenti', 'scoperta_il'] },
   db_candidati: { key: 'dominio', columns: ['dominio', 'nome', 'sito', 'hub_origine', 'primo_visto', 'ultimo_check', 'stato_crawler', 'motivo', 'dominio_registrato', 'primo_archivio', 'anni_sul_sito', 'settori', 'punteggio_deep', 'europa', 'segnali_funding', 'email', 'linkedin_azienda', 'linkedin_persone', 'founder_nomi', 'team_stima', 'descrizione', 'domanda_reale', 'evidenze', 'pagine_lette', 'versione_crawler', 'snowball_il', 'eta_stimata', 'fonti_eta', 'eta_il'] },
   db_valutazioni: { key: 'id', columns: ['id', 'dominio', 'classificatore', 'versione', 'valutato_il', 'esito', 'fit', 'voto', 'motivo', 'fondazione', 'grant', 'investimenti', 'accesso_lab', 'team', 'eta_founder', 'under30', 'domanda_reale', 'da_verificare', 'fonti', 'nota_alex', 'eta_stimata', 'fonti_eta'] },
   db_log: { key: null, columns: ['componente', 'inizio', 'fine', 'statistiche'] },
