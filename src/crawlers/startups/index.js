@@ -51,6 +51,7 @@ export async function run({ deadline = deadlineFromNow(), log = console.log } = 
 
   const out = writer(TABS.cand, 'dominio', 200);   // blocchi grandi: ogni scrittura nel foglio ha un costo fisso
   const hubOut = writer(TABS.hub, 'hub_id', 50);
+  const slowHosts = new Map();   // sito -> hub andati in timeout in questo giro
   const queue = [];                       // candidati nuovi da controllare
   const inRun = new Map();                // dominio -> candidato (dedup nel run)
   const extraHub = new Map();             // dominio noto -> nuovi hub da aggiungere a hub_origine
@@ -86,6 +87,14 @@ export async function run({ deadline = deadlineFromNow(), log = console.log } = 
         while (queue.length > MAX_QUEUE && Date.now() < deadline) await sleep(2000);
         if (Date.now() >= deadline) break;
         const h = due[i++];
+        const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
+        // sito che va in timeout su 2 hub: gli altri suoi hub di questo giro si rimandano subito, senza aspettare 8 minuti l'uno
+        if ((slowHosts.get(hostOf(h.url)) || 0) >= 2) {
+          const f = (+h.fallimenti || 0) + 1;
+          st.hub_scaduti = (st.hub_scaduti || 0) + 1;
+          await hubOut.push({ hub_id: h.hub_id, fallimenti: f, ultimo_crawl: now(), ...(f >= HUB_MAX_FAILS ? { stato: 'irraggiungibile' } : {}) });
+          continue;
+        }
         try {
           const ad = adapterFor(h.url);
           const conf = SOURCES.directories.find(x => x.adapter === ad);
@@ -95,6 +104,7 @@ export async function run({ deadline = deadlineFromNow(), log = console.log } = 
             // tempo scaduto: conta come fallimento e va in fondo alla coda (prima restava in testa e bloccava ogni giro)
             const f = (+h.fallimenti || 0) + 1;
             st.hub_scaduti = (st.hub_scaduti || 0) + 1;
+            const hs = hostOf(h.url); slowHosts.set(hs, (slowHosts.get(hs) || 0) + 1);
             log(`hub ${h.nome.slice(0, 40)}: tempo scaduto (${f}/${HUB_MAX_FAILS}), passa in fondo alla coda`);
             await hubOut.push({ hub_id: h.hub_id, fallimenti: f, ultimo_crawl: now(), ...(f >= HUB_MAX_FAILS ? { stato: 'irraggiungibile' } : {}) });
             continue;
