@@ -23,7 +23,7 @@ const KIND = [
   ['investors', /(investor|backers|funding|partners|supporters)/i],
   ['tech', /(technology|product|research|science|solution|platform|how-it-works)/i],
 ];
-const SKIP = /(privacy|cookie|terms|login|signin|sign-in|cart|checkout|account|\/tag\/|\/category\/|\/page\/\d|\?|#|\.(pdf|jpe?g|png|gif|svg|webp|zip|mp4)$|\/(fr|de|it|es|nl|pt|sv|fi|da|pl)\/)/i;
+const SKIP = /(privacy|datenschutz|impressum|cookie|terms|agb|login|signin|sign-in|cart|checkout|account|\/tag\/|\/category\/|\/page\/\d|\?|#|\.(pdf|jpe?g|png|gif|svg|webp|zip|mp4)$|\/(fr|de|it|es|nl|pt|sv|fi|da|pl)\/)/i;
 const kindOf = (l, tx) => (KIND.find(([, re]) => re.test(l.replace(/^https?:\/\/[^/]+/, '') + ' ' + tx)) || ['altro'])[0];
 const JOB = /\b(engineer|developer|scientist|researcher|manager|intern(ship)?|lead|head of|technician|designer|sales|operations|analyst|architect|specialist|officer|ingenieur|entwickler)\b/gi;
 

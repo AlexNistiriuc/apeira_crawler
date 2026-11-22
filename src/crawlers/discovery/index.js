@@ -14,7 +14,7 @@ import { read, upsert, logRun, TABS } from '../../lib/sheet.js';
 import { getPage } from '../../lib/http.js';
 import { host, reg, bad, links, hubKey } from '../../lib/url.js';
 import { now, today } from '../../lib/config.js';
-import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed, searchLog, provider } from '../../lib/search.js';
+import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed, searchLog, provider, sgCredits } from '../../lib/search.js';
 import { VCH, JUNKHUB } from '../../signals/patterns.js';
 import { hubType } from '../hubs/classify.js';
 
@@ -174,6 +174,7 @@ export async function run({ log = console.log, deadline = Date.now() + CFG.minut
   if (updates.length) await upsert('db_scoperta', 'query', updates);
   st.hub_aggiunti = add.length;
   Object.assign(st, searchLog());
+  const cr = await sgCredits(); if (cr != null) st.crediti_scrapegraph_rimasti = cr;
   await logRun('scoperta hub', startedAt, st);
   log(JSON.stringify(st));
   return st;

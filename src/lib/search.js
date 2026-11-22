@@ -97,3 +97,14 @@ export async function webSearch(q, { count = 8 } = {}) {
     }));
   } catch { searchStats.errori++; return []; }
 }
+
+/** Crediti ScrapeGraph rimasti (null se non disponibile): finisce nel registro dei giri. */
+export async function sgCredits() {
+  if (provider() !== 'scrapegraph') return null;
+  try {
+    const r = await impl((process.env.SCRAPEGRAPH_CREDITS || 'https://v2-api.scrapegraphai.com/api/credits'), { headers: { 'SGAI-APIKEY': process.env.SCRAPEGRAPH_API_KEY }, signal: AbortSignal.timeout(15000) });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j.remaining ?? j.remaining_credits ?? null;
+  } catch { return null; }
+}

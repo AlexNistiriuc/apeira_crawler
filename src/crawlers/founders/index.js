@@ -12,7 +12,7 @@
 import { read, upsert, logRun, TABS } from '../../lib/sheet.js';
 import { now, today } from '../../lib/config.js';
 import { checkCandidate } from '../startups/check.js';
-import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed, searchLog, provider } from '../../lib/search.js';
+import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed, searchLog, provider, sgCredits } from '../../lib/search.js';
 import { registryLookup, registryStats } from '../../lib/registry.js';
 import { estimateAge } from '../../signals/age.estimate.js';
 import { pickPeople, verifiedFromEstimate, registryFounders, newsFunding, companyName, parseJson } from '../../signals/facts.js';
@@ -140,6 +140,7 @@ export async function run(n = 100, log = console.log, domini = []) {
   st.registri = { ...registryStats };
   st.ricerche = { ...searchStats };
   Object.assign(st, searchLog());
+  const cr = await sgCredits(); if (cr != null) st.crediti_scrapegraph_rimasti = cr;
   await logRun('crawler founder', startedAt, st);
   log(JSON.stringify(st));
   return st;
