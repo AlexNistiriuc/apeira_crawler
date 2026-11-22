@@ -11,7 +11,8 @@
 // Uso: npm run founders -- [quante]   (default 100)
 import { read, upsert, logRun, TABS } from '../../lib/sheet.js';
 import { now, today } from '../../lib/config.js';
-import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed } from '../../lib/search.js';
+import { checkCandidate } from '../startups/check.js';
+import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed, searchLog, provider } from '../../lib/search.js';
 import { registryLookup, registryStats } from '../../lib/registry.js';
 import { estimateAge } from '../../signals/age.estimate.js';
 import { pickPeople, verifiedFromEstimate, registryFounders, newsFunding, companyName, parseJson } from '../../signals/facts.js';
@@ -44,12 +45,18 @@ export async function fundingNews(c) {
     .slice(0, 6).map(x => ({ title: trim(x.title, 200), url: x.url, snippet: trim(x.snippet, 600) }));
 }
 
-export async function run(n = 100, log = console.log) {
+/**
+ * @param {number} n  quante startup al massimo (le migliori senza fatti)
+ * @param {Function} log
+ * @param {string[]} domini  richiesta di un valutatore: queste startup si riapprofondiscono comunque
+ *   (sito intero riletto e ricerche rifatte), anche se avevano già i fatti
+ */
+export async function run(n = 100, log = console.log, domini = []) {
   const startedAt = now();
   const st = { candidate: 0, registro_trovato: 0, persone: 0, stimate: 0, eta_verificate: 0, notizie: 0, fatti_decisivi: 0, senza_nomi: 0 };
   const search = searchEnabled();
   if (search) setMonthlyUsed(monthlyUsed(await read(TABS.log, { columns: ['inizio', 'statistiche'] })));
-  else log('SEARCH_API_KEY mancante: solo registri, niente ricerche');
+  else log('nessuna chiave di ricerca (SCRAPEGRAPH_API_KEY o SEARCH_API_KEY): solo registri');
   const all = await read(TABS.cand, { columns: ['dominio', 'nome', 'founder_nomi', 'descrizione', 'hub_origine', 'eta_il', 'eta_stimata', 'fatti_il', 'notizie_funding', 'round_notizie'] });
   // riassunto dei round per chi ha già le notizie salvate (nessuna ricerca): lo vede la vista e l'agente di outreach
   // si ricalcola per tutti (regole cambiate = riassunto diverso); si scrive solo dove cambia
@@ -60,8 +67,20 @@ export async function run(n = 100, log = console.log) {
   }).filter(r => r.round_notizie !== r._old).map(({ _old, ...r }) => r);
   if (back.length) { await upsert(TABS.cand, 'dominio', back); st.riassunti_recuperati = back.length; }
   const cands = new Map(all.map(c => [c.dominio, c]));
-  const best = pickBest(await read(TABS.eval, { columns: ['dominio', 'classificatore', 'esito', 'fit', 'voto'] }), Infinity)
-    .map(v => cands.get(v.dominio)).filter(c => c && !c.fatti_il).slice(0, n);
+  const forced = domini.map(d => cands.get(d)).filter(Boolean);
+  const best = [...forced.map(c => ({ ...c, fatti_il: '', eta_il: '', _forza: true })), ...pickBest(await read(TABS.eval, { columns: ['dominio', 'classificatore', 'esito', 'fit', 'voto'] }), Infinity)
+    .map(v => cands.get(v.dominio)).filter(c => c && !c.fatti_il && !domini.includes(c.dominio)).slice(0, n)];
+  if (forced.length) {
+    // sito intero riletto per le startup chieste dal valutatore
+    const full = await read(TABS.cand, { columns: ['dominio', 'nome', 'sito', 'hub_origine', 'primo_visto'] });
+    const rows = [];
+    for (const c of full.filter(x => domini.includes(x.dominio))) {
+      const r = await checkCandidate({ dominio: c.dominio, sito: c.sito, nome: c.nome, hubs: String(c.hub_origine || '').split(', ').filter(Boolean), primo_visto: c.primo_visto, trusted: false }).catch(() => null);
+      if (r) rows.push(r);
+    }
+    if (rows.length) await upsert(TABS.cand, 'dominio', rows);
+    st.riletti = rows.length;
+  }
   st.candidate = best.length;
   const out = [];
   for (const c of best) {
@@ -120,12 +139,12 @@ export async function run(n = 100, log = console.log) {
   if (out.length) await upsert(TABS.cand, 'dominio', out);
   st.registri = { ...registryStats };
   st.ricerche = { ...searchStats };
-  st.ricerche_brave = searchStats.ricerche;
+  Object.assign(st, searchLog());
   await logRun('crawler founder', startedAt, st);
   log(JSON.stringify(st));
   return st;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  run(Number(process.argv[2] || 100)).then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });
+  run(Number(process.argv[2] || 100), console.log, String(process.env.DOMINI || '').split(/[,\s]+/).map(x => x.trim().toLowerCase()).filter(Boolean)).then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });
 }

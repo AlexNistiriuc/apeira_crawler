@@ -38,6 +38,7 @@ jobs:
           SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
           SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
           SEARCH_API_KEY: ${{ secrets.SEARCH_API_KEY }}
+          SCRAPEGRAPH_API_KEY: ${{ secrets.SCRAPEGRAPH_API_KEY }}
           COMPANIES_HOUSE_KEY: ${{ secrets.COMPANIES_HOUSE_KEY }}
       # l'euristico ripassa solo le startup con fatti nuovi (il crawler founder ha aggiornato ultimo_check)
       - if: always() && steps.crawl.outcome == 'success'

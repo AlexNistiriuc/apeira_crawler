@@ -51,7 +51,7 @@ export async function classifyQueue(clf, limit = 500, log = console.log, { deadl
   await out.flush();
 
   if (fatal) st.fermato_per = fatal;
-  if (clf.stats) { st.consumo = clf.stats(); if (st.consumo.ricerche_brave != null) st.ricerche_brave = st.consumo.ricerche_brave; }
+  if (clf.stats) { st.consumo = clf.stats(); if (st.consumo.ricerche_brave != null) st.ricerche_brave = st.consumo.ricerche_brave; if (st.consumo.ricerche_scrapegraph != null) st.ricerche_scrapegraph = st.consumo.ricerche_scrapegraph; }
   // altro lavoro: la coda era piena fino al limite, o è rimasto qualcosa per tempo o errori
   st.altro_lavoro = !fatal && (rows.length >= limit || st.saltate_per_tempo > 0);
   if (refreshView && st.scritte) { try { await views(); } catch (err) { log('vista non aggiornata: ' + err.message); } }

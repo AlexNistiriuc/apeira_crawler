@@ -9,7 +9,10 @@ const cut = (t, n) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, n);
 /** JSON sotto il limite di una cella (50k caratteri), accorciando gli estratti se serve. */
 function safeJson(ev) {
   let t = JSON.stringify(ev);
-  if (t.length > 45000) { ev.estratto_home = ev.estratto_home.slice(0, 800); ev.estratto_team = ''; t = JSON.stringify(ev); }
+  if (t.length > 45000) {
+    for (const k of ['estratto_altro', 'estratto_tech', 'estratto_blog', 'estratto_careers', 'estratto_about', 'estratto_investors']) if (ev[k]) ev[k] = ev[k].slice(0, 400);
+    ev.estratto_home = ev.estratto_home.slice(0, 800); ev.estratto_team = ''; t = JSON.stringify(ev);
+  }
   return t.length > 45000 ? JSON.stringify({ ...ev, evd: undefined, fa: undefined }) : t;
 }
 
@@ -33,6 +36,15 @@ export function candidateRow(c, s, x) {
     fund: s.fund, fa: s.fa, ts: s.ts, evd: s.evd, dem: s.dem,
     estratto_home: extract(x.texts?.home, 2500),
     estratto_team: extract(x.texts?.team, 1500),
+    // sito intero (solo per chi passa il prefiltro): estratti per tipo di pagina per i valutatori
+    ...(x.sito ? {
+      sito: { pagine: x.sito.lette, grande: x.sito.grande, secondi: x.sito.secondi, posizioni_aperte: x.sito.posizioni, per_tipo: x.sito.per_tipo },
+      estratto_careers: extract(x.texts?.careers, 1500),
+      estratto_blog: extract(x.texts?.blog, 2500),
+      estratto_about: extract(x.texts?.about, 1500),
+      estratto_investors: extract(x.texts?.investors, 1000),
+      estratto_tech: extract(x.texts?.tech, 1000),
+    } : {}),
   } : null;
   return {
     dominio: c.dominio,

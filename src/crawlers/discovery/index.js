@@ -14,7 +14,7 @@ import { read, upsert, logRun, TABS } from '../../lib/sheet.js';
 import { getPage } from '../../lib/http.js';
 import { host, reg, bad, links, hubKey } from '../../lib/url.js';
 import { now, today } from '../../lib/config.js';
-import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed } from '../../lib/search.js';
+import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed, searchLog, provider } from '../../lib/search.js';
 import { VCH, JUNKHUB } from '../../signals/patterns.js';
 import { hubType } from '../hubs/classify.js';
 
@@ -138,7 +138,8 @@ export async function run({ log = console.log, deadline = Date.now() + CFG.minut
     const logRows = await read(TABS.log, { columns: ['componente', 'inizio', 'statistiche'] });
     setMonthlyUsed(monthlyUsed(logRows));
     const usedForDiscovery = monthlyUsed(logRows.filter(r => r.componente === 'scoperta hub'));
-    const budget = Math.max(0, Math.min(CFG.ricerche_per_giro, CFG.tetto_mensile_scoperta - usedForDiscovery));
+    // con ScrapeGraph nessun tetto mensile (si va finché ci sono crediti); con Brave il tetto dedicato alla scoperta
+    const budget = provider() === 'scrapegraph' ? CFG.ricerche_per_giro : Math.max(0, Math.min(CFG.ricerche_per_giro, CFG.tetto_mensile_scoperta - usedForDiscovery));
     for (const p of pickQueries(new Set(byQ.keys()), stats, budget)) {
       const res = await webSearch(p.q, { count: 10 });
       st.domande++; st.risultati += res.length;
@@ -172,7 +173,7 @@ export async function run({ log = console.log, deadline = Date.now() + CFG.minut
   if (explored.length) await upsert(TABS.hub, 'hub_id', explored);
   if (updates.length) await upsert('db_scoperta', 'query', updates);
   st.hub_aggiunti = add.length;
-  st.ricerche_brave = searchStats.ricerche;
+  Object.assign(st, searchLog());
   await logRun('scoperta hub', startedAt, st);
   log(JSON.stringify(st));
   return st;

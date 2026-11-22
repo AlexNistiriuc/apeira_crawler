@@ -12,7 +12,7 @@
 import { getPage } from '../lib/http.js';
 import { links, host, reg } from '../lib/url.js';
 import { extract } from '../crawlers/startups/row.js';
-import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed } from '../lib/search.js';
+import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed, searchLog, provider } from '../lib/search.js';
 import { read, TABS } from '../lib/sheet.js';
 import { CRITERIA as C } from '../lib/config.js';
 import euristico from './euristico.js';
@@ -107,7 +107,11 @@ function candidateContent(c, baseline, webResearch = [], site = null) {
     demand: { summary: trim(c.domanda_reale, 1000), evidence: ev.dem },
     public_contact_available: Boolean(c.email || c.linkedin_persone),
     deep_tech: { score: ev.deep, negative_score: ev.neg, strong_signals: ev.strong, tags: ev.tags },
-    page_extracts: site && site.length ? site : { home: trim(ev.estratto_home, 3000), team: trim(ev.estratto_team, 2000) },
+    page_extracts: site && site.length ? site : {
+      home: trim(ev.estratto_home, 3000), team: trim(ev.estratto_team, 2000),
+      ...(ev.sito ? { careers: trim(ev.estratto_careers, 1500), blog_news: trim(ev.estratto_blog, 2500), about: trim(ev.estratto_about, 1500), investors: trim(ev.estratto_investors, 1000), technology: trim(ev.estratto_tech, 1000) } : {}),
+    },
+    whole_site_read_by_crawler: ev.sito ? { pages: ev.sito.pages ?? ev.sito.pagine, open_positions_found: ev.sito.posizioni_aperte, big_site: ev.sito.grande, pages_by_type: ev.sito.per_tipo } : 'no (home and team only)',
     founder_age_estimate_from_crawler: c.eta_stimata || 'not estimated',
     verified_founder_ages_from_crawler: parseJson(c.eta_verificate, []),
     company_registry_from_crawler: parseJson(c.registro) || 'not found or not checked',
@@ -341,6 +345,8 @@ const SITE_MAX_CHARS = Number(process.env.SAGE_SITE_CHARS || 20000);
 /** Rilegge il sito della startup al momento (home + fino a 3 pagine utili), solo in memoria: non si salva niente. */
 export async function readSite(c) {
   if (process.env.SAGE_READ_SITE === '0' || !c.sito) return null;
+  // il crawler ha già letto tutto il sito: si usano i suoi estratti, niente seconda lettura
+  try { if (JSON.parse(c.evidenze || '{}').sito) return null; } catch {}
   const home = await getPage(c.sito, { maxJinaBacklog: 4 });
   if (home.status !== 200 || !home.text) return null;
   const dom = String(c.dominio || '').toLowerCase();
@@ -381,7 +387,7 @@ export default {
   onlyNew: process.env.SAGE_SOLO_NUOVE !== '0',
   parallel: Number(process.env.SAGE_PARALLEL || 3),
   writeEvery: 10,
-  stats: () => ({ ...usage, ricerche_brave: searchStats.ricerche }),
+  stats: () => ({ ...usage, ...searchLog() }),
   /** A inizio giro: quante ricerche Brave sono già state usate nel mese. */
   async init() { if (searchEnabled()) setMonthlyUsed(monthlyUsed(await read(TABS.log, { columns: ['inizio', 'statistiche'] }))); },
 

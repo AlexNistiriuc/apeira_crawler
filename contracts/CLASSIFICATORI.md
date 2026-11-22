@@ -31,7 +31,9 @@ dopo l'ultima valutazione. Ogni riga ha tutte le colonne di `db_candidati`. Le p
 - Si valuta solo dopo il crawler founder (`fatti_il` presente). Senza fatti niente fit Alto.
 - Si leggono sempre il testo delle pagine (`evidenze.estratto_home`, `estratto_team`) e le notizie salvate (`notizie_funding`), non solo i campi riassunti.
 - "Backed by", loghi di investitori o una pagina su un database di funding con il nome della startup sono segnali di round: da verificare e fit giù; se l'importo supera la soglia, esclusa.
-- Se manca un dato, lo si chiede ai crawler (nuova raccolta del crawler founder), non si cerca da soli sul web.
+- Se manca un dato, lo si chiede ai crawler, non si cerca da soli sul web: workflow "crawler founder" con `domini` = elenco delle startup (rilegge tutto il sito e rifà registri, età e notizie), poi l'euristico ripassa.
+- Per chi passa il prefiltro il crawler legge tutto il sito (fino a 15 pagine e 90 secondi, priorità a careers, blog/news, about, investitori): in `evidenze` ci sono `sito` (pagine lette, posizioni aperte, sito grande) e gli estratti `estratto_careers`, `estratto_blog`, `estratto_about`, `estratto_investors`, `estratto_tech`. Vanno letti.
+- Ricerche web dei crawler: ScrapeGraph se c'è `SCRAPEGRAPH_API_KEY`, altrimenti Brave. Le pagine di linkedin.com non si leggono.
 
 `evidenze` (JSON, versione 2):
 

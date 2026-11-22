@@ -24,7 +24,7 @@ const RECRAWL_DAYS = Number(process.env.RECRAWL_DAYS || 7);
 const MAX_HUBS = Number(process.env.MAX_HUBS || 400);
 const HUB_MAX_FAILS = 3;
 const RETRY_PER_RUN = Number(process.env.HUB_RETRY_PER_RUN || 15);
-const CAND_TIMEOUT_MS = 120_000;      // un candidato non può tenere occupato un lavoratore per più di 2 minuti
+const CAND_TIMEOUT_MS = 240_000;      // un candidato non può tenere occupato un lavoratore per più di 4 minuti (lettura del sito intero compresa)
 const HUB_TIMEOUT_MS = 8 * 60_000;    // un hub non può bloccare la scoperta per più di 8 minuti
 const MAX_QUEUE = 1500;               // oltre questa coda la scoperta aspetta: inutile trovare più di quanto si riesce a controllare
 

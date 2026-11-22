@@ -112,6 +112,10 @@ export default {
     let fit = target && score >= 6 && contact ? 'Alto' : target || (!ageOk && score >= 7) ? 'Medio' : 'Basso';
     const down = f => (f === 'Alto' ? 'Medio' : 'Basso');
     if (tm.n > C.max_team_size) { if (tm.k === 'e') fit = 'Basso'; else if (tm.k === 'li' || tm.n > 8) fit = down(fit); }
+    // posizioni aperte sul sito (crawler, sito intero): con molte assunzioni il team è probabilmente oltre 5
+    const jobs = +(ev.sito?.posizioni_aperte || 0);
+    if (jobs >= 3) { note.push(`${jobs} posizioni aperte sul sito: team probabilmente oltre ${C.max_team_size}`); ver.push('team (posizioni aperte)'); fit = down(fit); }
+    if (jobs >= 8) fit = down(fit);
     if (phaseDown) fit = down(fit);
     if (eta.startsWith('non verificata') && /35 o più/.test(c.eta_stimata || '')) fit = down(fit); // stima: ordina, non esclude
 
