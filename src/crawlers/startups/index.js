@@ -91,7 +91,14 @@ export async function run({ deadline = deadlineFromNow(), log = console.log } = 
           const conf = SOURCES.directories.find(x => x.adapter === ad);
           const job = ad ? runAdapter(ad, h, h.cursore || '', conf?.max_pages_per_run || 400) : discover(h, { deep: /^(rete|directory)/.test(h.origine || '') || h.tipo === 'directory', slow: !!h.retry });
           const r = await withTimeout(job, HUB_TIMEOUT_MS, null);
-          if (!r) { log(`hub ${h.nome.slice(0, 40)}: tempo scaduto, riprovo al prossimo run`); continue; }
+          if (!r) {
+            // tempo scaduto: conta come fallimento e va in fondo alla coda (prima restava in testa e bloccava ogni giro)
+            const f = (+h.fallimenti || 0) + 1;
+            st.hub_scaduti = (st.hub_scaduti || 0) + 1;
+            log(`hub ${h.nome.slice(0, 40)}: tempo scaduto (${f}/${HUB_MAX_FAILS}), passa in fondo alla coda`);
+            await hubOut.push({ hub_id: h.hub_id, fallimenti: f, ultimo_crawl: now(), ...(f >= HUB_MAX_FAILS ? { stato: 'irraggiungibile' } : {}) });
+            continue;
+          }
           for (const it of r.found) offer(it, h.nome, !!ad);
           st.hub_letti++;
           if (h.retry) {
