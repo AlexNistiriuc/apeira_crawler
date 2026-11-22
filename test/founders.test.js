@@ -27,7 +27,9 @@ test('crawler founder: solo CEO e CTO, una ricerca per persona, una volta sola',
   setSearchFetch(async url => { const q = decodeURIComponent(new URL(url).searchParams.get('q')); queries.push(q);
     return Response.json({ web: { results: [{ title: 'Qubo team', url: 'https://uni.example/qubo', description: q.includes('Rossi') ? 'Anna Rossi (MSc 2023) leads Qubo.' : 'nothing useful' }] } }); });
   const st = await run(10, () => {});
-  assert.deepEqual(queries, ['"Anna Rossi" Qubo', '"Marco Bianchi" Qubo', '"Qubo" funding OR raises OR "pre-seed" OR seed OR grant OR award'], 'Luca Verdi (co-founder) non cercato, una sola ricerca funding');
+  assert.equal(queries[0], '"Qubo" funding OR raises OR "pre-seed" OR seed OR grant OR founder OR CEO', 'prima una ricerca su round e founder');
+  assert.ok(queries.slice(1).every(q => /^"(Anna Rossi|Marco Bianchi)" Qubo$/.test(q)), 'poi al massimo una per CEO e CTO (startup Alto), Luca Verdi non cercato');
+  assert.ok(queries.length <= 3);
   assert.equal(st.stimate, 1);
   const c = (await read('db_candidati'))[0];
   assert.match(c.eta_stimata, /CEO Anna Rossi: sotto 30 \(anno di laurea/);

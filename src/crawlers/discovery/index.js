@@ -88,7 +88,7 @@ export function poolLinks(url, md, all = false) {
 export async function run({ log = console.log, deadline = Date.now() + CFG.minuti_per_giro * 60_000 } = {}) {
   const startedAt = now();
   const st = { domande: 0, risultati: 0, testati: 0, hub_nuovi: 0, da_verificare: 0, da_liste: 0, da_hub: 0 };
-  const hubs = await read(TABS.hub, { columns: ['hub_id', 'nome', 'url', 'origine', 'stato', 'candidati_trovati', 'candidati_da_valutare', 'scoperta_il'] });
+  const hubs = await read(TABS.hub, { columns: ['hub_id', 'nome', 'url', 'origine', 'stato', 'candidati_trovati', 'candidati_da_valutare', 'scoperta_il', 'ultimo_crawl'] });
   const have = new Set(hubs.map(h => h.hub_id));
   const add = [];
   let tests = 0;
@@ -139,7 +139,10 @@ export async function run({ log = console.log, deadline = Date.now() + CFG.minut
     setMonthlyUsed(monthlyUsed(logRows));
     const usedForDiscovery = monthlyUsed(logRows.filter(r => r.componente === 'scoperta hub'));
     // con ScrapeGraph nessun tetto mensile (si va finché ci sono crediti); con Brave il tetto dedicato alla scoperta
-    const budget = provider() === 'scrapegraph' ? CFG.ricerche_per_giro : Math.max(0, Math.min(CFG.ricerche_per_giro, CFG.tetto_mensile_scoperta - usedForDiscovery));
+    let budget = provider() === 'scrapegraph' ? CFG.ricerche_per_giro : Math.max(0, Math.min(CFG.ricerche_per_giro, CFG.tetto_mensile_scoperta - usedForDiscovery));
+    // il crawler startup ha già tanti hub mai letti: niente ricerche nuove finché non li smaltisce (crediti risparmiati)
+    const unread = hubs.filter(h => /^(attivo|da_verificare)$/.test(h.stato) && !h.ultimo_crawl).length;
+    if (unread > (CFG.pausa_se_hub_da_leggere ?? 80)) { budget = 0; st.pausa = `${unread} hub ancora da leggere`; }
     for (const p of pickQueries(new Set(byQ.keys()), stats, budget)) {
       const res = await webSearch(p.q, { count: 10 });
       st.domande++; st.risultati += res.length;

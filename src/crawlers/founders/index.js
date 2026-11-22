@@ -39,10 +39,11 @@ export function pickBest(evals, n) {
 /** Stessa ricerca e stesso filtro che usava Sage: risultati che nominano la startup. */
 export async function fundingNews(c) {
   const name = companyName(c);
-  const res = await webSearch(`"${name}" funding OR raises OR "pre-seed" OR seed OR grant OR award`);
+  // round e founder nella stessa ricerca: le pagine trovate servono sia per la fase sia per l'età
+  const res = await webSearch(`"${name}" funding OR raises OR "pre-seed" OR seed OR grant OR founder OR CEO`);
   const dom = String(c.dominio || '').toLowerCase(), nm = String(name).toLowerCase();
   return res.filter(x => { const h = `${x.url} ${x.title} ${x.snippet}`.toLowerCase(); return h.includes(dom) || (nm.length > 4 && h.includes(nm)); })
-    .slice(0, 6).map(x => ({ title: trim(x.title, 200), url: x.url, snippet: trim(x.snippet, 600) }));
+    .slice(0, 6).map(x => ({ title: trim(x.title, 200), url: x.url, snippet: trim(x.snippet, 900) }));
 }
 
 /**
@@ -69,7 +70,7 @@ export async function run(n = 100, log = console.log, domini = []) {
   const cands = new Map(all.map(c => [c.dominio, c]));
   const forced = domini.map(d => cands.get(d)).filter(Boolean);
   const best = [...forced.map(c => ({ ...c, fatti_il: '', eta_il: '', _forza: true })), ...pickBest(await read(TABS.eval, { columns: ['dominio', 'classificatore', 'esito', 'fit', 'voto'] }), Infinity)
-    .map(v => cands.get(v.dominio)).filter(c => c && !c.fatti_il && !domini.includes(c.dominio)).slice(0, n)];
+    .map(v => cands.get(v.dominio) && { ...cands.get(v.dominio), _fit: v.fit }).filter(c => c && !c.fatti_il && !domini.includes(c.dominio)).slice(0, n)];
   if (forced.length) {
     // sito intero riletto per le startup chieste dal valutatore
     const full = await read(TABS.cand, { columns: ['dominio', 'nome', 'sito', 'hub_origine', 'primo_visto'] });
@@ -96,7 +97,12 @@ export async function run(n = 100, log = console.log, domini = []) {
       decisive = true;
     }
     const oldCompany = reg && reg.costituita && Number(reg.costituita.slice(0, 4)) < 2025;
-    // 2. età dei founder (se il registro non le copre già e non le abbiamo già cercate)
+    // 2. una sola ricerca su round e founder, fatta prima: i suoi risultati servono anche per l'età (risparmio crediti)
+    let news = null;
+    if (search && !oldCompany) news = await fundingNews(c);
+    // 3. età dei founder (se il registro non le copre già e non le abbiamo già cercate). Prima si guarda nei
+    // risultati già scaricati; una ricerca per persona solo per le startup Alto (o chieste dal valutatore)
+    // quando lì non c'è niente.
     const covered = n2 => verified.some(v => v.nome.toLowerCase().split(' ').pop() === n2.toLowerCase().split(' ').pop());
     const people = pickPeople(c.founder_nomi).filter(p => !covered(p.nome));
     // il vecchio crawler segnava "non identificati" chi non aveva CEO o CTO: ora si riprova con i founder elencati
@@ -107,8 +113,8 @@ export async function run(n = 100, log = console.log, domini = []) {
         const parts = [], fonti = [];
         for (const p of people) {
           st.persone++;
-          const res = await webSearch(`"${p.nome}" ${companyName(c)}`);
-          const e = estimateAge(p.nome, res);
+          let e = estimateAge(p.nome, news || []);
+          if (e.eta == null && (c._fit === 'Alto' || c._forza)) { st.ricerche_persona = (st.ricerche_persona || 0) + 1; e = estimateAge(p.nome, await webSearch(`"${p.nome}" ${companyName(c)}`)); }
           if (e.eta != null) st.stimate++;
           const v = verifiedFromEstimate(p, e);
           if (v) verified.push(v);
@@ -123,8 +129,7 @@ export async function run(n = 100, log = console.log, domini = []) {
     row.eta_verificate = JSON.stringify(verified);
     if (verified.length) { st.eta_verificate += verified.length; decisive = true; }
     // 3. notizie di funding (fase)
-    if (search && !oldCompany) {
-      const news = await fundingNews(c);
+    if (news) {
       row.notizie_funding = JSON.stringify(news);
       if (news.length) st.notizie++;
       const f = newsFunding(news, companyName(c), c.dominio);
