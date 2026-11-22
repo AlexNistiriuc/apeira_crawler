@@ -106,5 +106,6 @@
   "minuti_per_giro": 20,
   "link_da_lista": 40,
   "pausa_se_hub_da_leggere": 80,
-  "_nota_crediti": "Con ScrapeGraph: la scoperta si ferma quando il crawler startup ha più di pausa_se_hub_da_leggere hub mai letti."
+  "_nota_crediti": "Con ScrapeGraph: la scoperta si ferma quando il crawler startup ha più di pausa_se_hub_da_leggere hub mai letti.",
+  "riserva_crediti_valutatori": 5000
 }

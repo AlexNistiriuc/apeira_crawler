@@ -55,7 +55,12 @@ export async function fundingNews(c) {
 export async function run(n = 100, log = console.log, domini = []) {
   const startedAt = now();
   const st = { candidate: 0, registro_trovato: 0, persone: 0, stimate: 0, eta_verificate: 0, notizie: 0, fatti_decisivi: 0, senza_nomi: 0 };
-  const search = searchEnabled();
+  let search = searchEnabled();
+  // sotto la riserva i crediti restano ai valutatori: si cerca solo per le startup che chiedono loro (domini)
+  const cr0 = await sgCredits();
+  const reserve = Number(process.env.SCRAPEGRAPH_RISERVA || 2000);
+  const onlyForced = cr0 != null && cr0 < reserve;
+  if (onlyForced) st.riserva = `crediti ${cr0}: ricerche solo per le startup chieste dai valutatori`;
   if (search) setMonthlyUsed(monthlyUsed(await read(TABS.log, { columns: ['inizio', 'statistiche'] })));
   else log('nessuna chiave di ricerca (SCRAPEGRAPH_API_KEY o SEARCH_API_KEY): solo registri');
   const all = await read(TABS.cand, { columns: ['dominio', 'nome', 'founder_nomi', 'descrizione', 'hub_origine', 'eta_il', 'eta_stimata', 'fatti_il', 'notizie_funding', 'round_notizie'] });
@@ -99,7 +104,8 @@ export async function run(n = 100, log = console.log, domini = []) {
     const oldCompany = reg && reg.costituita && Number(reg.costituita.slice(0, 4)) < 2025;
     // 2. una sola ricerca su round e founder, fatta prima: i suoi risultati servono anche per l'età (risparmio crediti)
     let news = null;
-    if (search && !oldCompany) news = await fundingNews(c);
+    const canSearch = search && (!onlyForced || c._forza);
+    if (canSearch && !oldCompany) news = await fundingNews(c);
     // 3. età dei founder (se il registro non le copre già e non le abbiamo già cercate). Prima si guarda nei
     // risultati già scaricati; una ricerca per persona solo per le startup Alto (o chieste dal valutatore)
     // quando lì non c'è niente.
@@ -107,7 +113,7 @@ export async function run(n = 100, log = console.log, domini = []) {
     const people = pickPeople(c.founder_nomi).filter(p => !covered(p.nome));
     // il vecchio crawler segnava "non identificati" chi non aveva CEO o CTO: ora si riprova con i founder elencati
     const ageDone = c.eta_il && !/non identificati/.test(c.eta_stimata || '');
-    if (search && !oldCompany && !ageDone) {
+    if (canSearch && !oldCompany && !ageDone) {
       if (!pickPeople(c.founder_nomi).length) { st.senza_nomi++; row.eta_il = today(); row.eta_stimata = 'CEO e CTO non identificati sul sito'; }
       else if (people.length) {
         const parts = [], fonti = [];
@@ -137,7 +143,7 @@ export async function run(n = 100, log = console.log, domini = []) {
       if (f.investimenti.length || f.grant.length || f.fase || f.team) decisive = true;
     }
     if (decisive) { st.fatti_decisivi++; row.ultimo_check = now(); }
-    if (!search) delete row.fatti_il; // senza Brave si riprova al prossimo giro (i registri sono gratis)
+    if (!canSearch) delete row.fatti_il; // senza Brave si riprova al prossimo giro (i registri sono gratis)
     out.push(row);
     if (out.length >= 20) await upsert(TABS.cand, 'dominio', out.splice(0));
   }

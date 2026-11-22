@@ -143,6 +143,8 @@ export async function run({ log = console.log, deadline = Date.now() + CFG.minut
     // il crawler startup ha già tanti hub mai letti: niente ricerche nuove finché non li smaltisce (crediti risparmiati)
     const unread = hubs.filter(h => /^(attivo|da_verificare)$/.test(h.stato) && !h.ultimo_crawl).length;
     if (unread > (CFG.pausa_se_hub_da_leggere ?? 80)) { budget = 0; st.pausa = `${unread} hub ancora da leggere`; }
+    // riserva per i valutatori: sotto questa soglia la scoperta non usa più crediti
+    if (budget && provider() === 'scrapegraph') { const cr = await sgCredits(); if (cr != null && cr < (CFG.riserva_crediti_valutatori ?? 5000)) { budget = 0; st.pausa = `crediti sotto la riserva per i valutatori (${cr})`; } }
     for (const p of pickQueries(new Set(byQ.keys()), stats, budget)) {
       const res = await webSearch(p.q, { count: 10 });
       st.domande++; st.risultati += res.length;
