@@ -13,9 +13,11 @@ import { appendFileSync } from 'node:fs';
 import { queue, logRun, views, writer, TABS } from '../lib/sheet.js';
 import { now } from '../lib/config.js';
 import { validateEvaluation } from './contract.js';
+import { ensureLinkedin, linkedinStats, resetLinkedinStats } from '../crawlers/linkedin/index.js';
 
 export async function classifyQueue(clf, limit = 500, log = console.log, { deadline = Infinity, refreshView = false } = {}) {
   const startedAt = now();
+  resetLinkedinStats();
   if (clf.init) await clf.init();
   const rows = await queue(clf.name, limit, clf.rankBy, Boolean(clf.onlyNew));
   const out = writer(TABS.eval, 'id', clf.writeEvery || 200);
@@ -27,6 +29,12 @@ export async function classifyQueue(clf, limit = 500, log = console.log, { deadl
       if (Date.now() >= deadline) { st.saltate_per_tempo = rows.length - i; i = rows.length; break; }
       const c = rows[i++];
       try { c.ev = c.evidenze ? JSON.parse(c.evidenze) : {}; } catch { c.ev = {}; }
+      // Black box obbligatoria: ogni evaluator riceve c.li con i dati LinkedIn (o il motivo
+      // per cui non ci sono). Non si può classificare senza passare da qui.
+      try { c.li = await ensureLinkedin(c); }
+      catch (err) { c.li = { disponibile: false, motivo: err.message }; }
+      // gli evaluator che leggono le colonne (Sage: c.eta_stimata) vedono subito gli stessi dati di c.li
+      if (c.li.disponibile) { c.eta_stimata = c.li.testo; c.fonti_eta = (c.li.fonti || []).join(', '); }
       let e;
       try { e = await clf.classify(c); }
       catch (err) {
@@ -48,6 +56,7 @@ export async function classifyQueue(clf, limit = 500, log = console.log, { deadl
   await out.flush();
 
   if (fatal) st.fermato_per = fatal;
+  st.linkedin = { ...linkedinStats };
   if (clf.stats) { st.consumo = clf.stats(); if (st.consumo.ricerche_brave != null) st.ricerche_brave = st.consumo.ricerche_brave; }
   // altro lavoro: la coda era piena fino al limite, o è rimasto qualcosa per tempo o errori
   st.altro_lavoro = !fatal && (rows.length >= limit || st.saltate_per_tempo > 0);

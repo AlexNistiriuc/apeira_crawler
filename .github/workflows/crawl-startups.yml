@@ -31,6 +31,8 @@ jobs:
         env:
           SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
           SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
+          SCRAPEGRAPH_API_KEY: ${{ secrets.SCRAPEGRAPH_API_KEY }}
+          SCRAPEGRAPH_MAX_PER_RUN: '120'
       # catena: appena finisce un giro riuscito ne parte un altro, così il crawler lavora senza sosta
       # (il cron orario resta come rete di sicurezza: GitHub a volte salta o ritarda gli orari programmati).
       # Si ferma da sola se il crawler fallisce, così un errore non brucia minuti in un ciclo veloce.
@@ -48,6 +50,9 @@ jobs:
           SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
           SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
           SEARCH_API_KEY: ${{ secrets.SEARCH_API_KEY }}
+          SCRAPEGRAPH_API_KEY: ${{ secrets.SCRAPEGRAPH_API_KEY }}
+          SCRAPEGRAPH_MAX_FOUNDERS: '3'
+          SCRAPEGRAPH_MAX_STARTUPS: '40'
       - if: always() && steps.crawl.outcome == 'success'
         run: gh workflow run crawl-startups.yml --ref main
         env:

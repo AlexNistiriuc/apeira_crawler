@@ -1,16 +1,21 @@
 # Apeira crawler v2
 
 Scouting di startup deep tech europee appena nate per la hackerhouse Apeira.
-Il Google Sheet `pool_founder_startup` è il database. Tre pezzi indipendenti lo leggono e lo
+Il Google Sheet `pool_founder_startup` è il database. Più pezzi indipendenti lo leggono e lo
 scrivono, ognuno solo nelle sue colonne:
 
 ```
    crawler hub ──────► db_hub ◄───────── crawler startup ──────► db_candidati
    (fonti nuove)       (pool)             (scopre e controlla)    (evidenze)
-                                                                       │
+                                                    │                    │
+                                                    ▼                    │
+                                         crawler LinkedIn ───────────────┤
+                                      (dipendenti, founder, età)         │
+                                                                         │
                                                          classificatori (qualsiasi)
-                                                                       │
-                                                                       ▼
+                                                         (ricevono c.li dalla black box)
+                                                                         │
+                                                                         ▼
                                     Startup trovate ◄──────  db_valutazioni
                                  (vista per Alex e outreach) (esito, fit, voto)
 ```
@@ -19,6 +24,7 @@ scrivono, ognuno solo nelle sue colonne:
 | --- | --- | --- |
 | crawler hub | aggiunge pool: semi, reti di incubatori (EBN, UKSPA), snowball dai siti delle startup | GitHub Actions, alla fine di ogni giro del crawler startup |
 | crawler startup | legge i pool, trova i siti delle startup, controlla età, funding, settore, team, contatti, salva le evidenze | GitHub Actions, a catena senza sosta (giri da ~45 minuti) |
+| crawler LinkedIn | per le startup Alto/Medio chiama ScrapeGraph e ricava dipendenti, anno di fondazione, data di inizio dei founder ed età stimata dalla prima esperienza educativa; scrive `eta_stimata`, `fonti_eta`, `eta_il` | dentro ogni classificazione (black box `ensureLinkedin`) e con `npm run linkedin` / workflow `crawler LinkedIn` |
 | classificatore euristico | i criteri rigidi della v1, come base di confronto | subito dopo ogni giro del crawler startup |
 | classificatore Sage | decide esito, fit e voto dopo l'euristico; completo (ricerca web + reasoning) per Fit Alto/Medio, leggero per Fit Basso | GitHub Actions, dopo ogni giro del crawler e a catena finché la coda non è vuota |
 | Claude con la skill | verifica manuale delle fonti e fallback | su richiesta |
@@ -44,9 +50,13 @@ contracts/schema.json        colonne e valori ammessi di ogni tab
 contracts/CLASSIFICATORI.md  come si attacca un classificatore
 apps-script/Code.gs          web app che trasforma il foglio in database (read, upsert, queue, vista)
 src/lib/                     rete (diretta + Jina, robots.txt), HTML, foglio, configurazione
+src/lib/scrapegraph.js       client ScrapeGraph v2 (search + extract) con tetto crediti
 src/signals/                 euristiche pure: settori, funding, età, team, evidenze, prefiltro
+src/signals/founders.js      parsing dei nomi founder e scelta delle startup migliori
+src/signals/age.linkedin.js  età dalla prima esperienza educativa e anzianità in azienda
 src/crawlers/hubs/           crawler degli hub
 src/crawlers/startups/       crawler delle startup (scoperta, directory, controllo, riga)
+src/crawlers/linkedin/       crawler LinkedIn (black box `ensureLinkedin` per gli evaluator)
 src/classifiers/             runner, contratto di uscita, classificatori euristico e Sage
 skill/                       skill di Claude per verifiche manuali e controllo salute
 tools/migrate-from-chrome.js porta nel foglio i dati della v1 rimasti in Chrome
@@ -63,13 +73,15 @@ test/                        test senza rete: euristiche, Code.gs su finto Sheet
 2. **Dati della v1.** Nella vecchia scheda Chrome del crawler apri la console e incolla
    `tools/migrate-from-chrome.js`. Porta hub e candidati già controllati.
 3. **GitHub.** Nel repo: Settings > Secrets and variables > Actions, aggiungi
-   `SHEET_API_URL`, `SHEET_API_TOKEN`, `SAGE_API_KEY` e, se ha credito, `JINA_KEY`. Le Actions partono da sole;
-   per provarle subito: Actions > crawler hub > Run workflow, poi crawler startup.
+   `SHEET_API_URL`, `SHEET_API_TOKEN`, `SAGE_API_KEY`, `SCRAPEGRAPH_API_KEY` e, se ha credito,
+   `JINA_KEY` e `SEARCH_API_KEY`. Le Actions partono da sole; per provarle subito:
+   Actions > crawler hub > Run workflow, poi crawler startup e crawler LinkedIn.
 4. **Claude.** Carica la skill da `skill/` per le verifiche manuali e il controllo della salute
    (vedi `skill/skills/apeira-startup-scouting/SKILL.md`).
 
 In locale: `npm ci`, poi `set -a; source .env; set +a` (vedi `.env.example`) e
-`npm run hubs`, `npm run startups`, `npm run classify -- euristico`.
+`npm run hubs`, `npm run startups`, `npm run classify -- euristico`, `npm run linkedin`,
+`npm run founders`.
 
 Per la valutazione Sage imposta `SAGE_API_KEY` e lancia
 `npm run classify -- sage 30`. Sage valuta prima i candidati con voto euristico più alto;
@@ -78,13 +90,60 @@ La chiave va conservata solo nell'ambiente locale o nei GitHub Actions secrets.
 `SAGE_REASONING` e `SAGE_GROUNDING_TRIGGER` permettono di cambiare i default `on` e `always`.
 `SHEET_DRY_RUN=1` legge dal foglio senza scrivere. `npm test` gira senza rete.
 
+## LinkedIn via ScrapeGraph (crawler dedicato e black box)
+
+Le startup con Fit **Alto** o **Medio** vengono arricchite con un crawler LinkedIn dedicato. È una
+black box: gli evaluator non chiamano ScrapeGraph direttamente, chiamano `ensureLinkedin(c)` e
+ricevono sempre lo stesso oggetto.
+
+```js
+import { ensureLinkedin } from '../crawlers/linkedin/index.js';
+
+const li = await ensureLinkedin(c);
+// li = {
+//   disponibile: true,
+//   fonte: 'scrapegraph' | 'cache',
+//   dipendenti: '11-50',
+//   fondata: 2025,
+//   founders: [{ nome, ruolo, linkedin, da: '2025-03', da_anno: 2025,
+//                eta: 24, fascia: 'sotto 30', education: {...} }],
+//   testo: '[SG] Dipendenti: 11-50 | Fondata: 2025 | Founder: ...',
+//   fonti: ['https://...']
+// }
+```
+
+Il runner dei classificatori (`src/classifiers/run.js`) la chiama **prima di ogni `classify`** e
+mette il risultato in `c.li`: nessun evaluator può saltarla. Euristico e Sage leggono `c.li` e
+vedono anche `eta_stimata`/`fonti_eta` salvati in `db_candidati`.
+
+- Fonte: ScrapeGraph v2 `search` (ricerca web + estrazione in una chiamata), mai login o scraping
+  diretto di linkedin.com. I dati LinkedIn restano indizi, non prove per le soglie rigide.
+- Cosa estrae: numero di dipendenti e anno di fondazione dall'azienda; per ogni founder la data di
+  inizio in azienda e la **prima esperienza educativa**. L'età è `anno corrente - inizio studi + 18`
+  (oppure `anno di fine + 22/24/28` a seconda del titolo).
+- Cache: `eta_il` recente + `eta_stimata` che inizia con `[SG]` (default 30 giorni,
+  `SCRAPEGRAPH_CACHE_DAYS`). Nessuna colonna nuova: si riusano `eta_stimata`, `fonti_eta`, `eta_il`.
+- Tetti: `SCRAPEGRAPH_MAX_PER_RUN` (chiamate per processo, default 120),
+  `SCRAPEGRAPH_MAX_STARTUPS` (startup per giro, default 40),
+  `SCRAPEGRAPH_MAX_FOUNDERS` (profili per startup, default 3).
+- Tempi: `SCRAPEGRAPH_TIMEOUT_MS` (default 30 s) e `SCRAPEGRAPH_RETRY_MS` (default 1 s, raddoppia
+  a ogni tentativo). Con `SCRAPEGRAPH_EXTRACT_FALLBACK=1`, se `search` non estrae JSON, prova
+  `extract` su una pagina non-LinkedIn tra i risultati.
+- Omonimi: il profilo del founder entra solo se cognome e azienda tornano; un profilo di un'altra
+  persona non viene conteggiato.
+- Fallback: se ScrapeGraph manca o non trova nulla, `npm run founders` usa la stima Brave +
+  regole già esistente per CEO e CTO.
+- Comandi: `npm run linkedin -- [quante]` (crawler autonomo) e workflow `crawler LinkedIn`
+  (ogni 3 ore, spegnibile con la variabile `SCRAPEGRAPH_ATTIVO = no`).
+
 ## Regole che il codice rispetta
 
-- LinkedIn non viene mai letto. I link LinkedIn arrivano solo dai siti delle startup.
+- LinkedIn non viene mai aperto con login o scraping diretto. I dati arrivano da ScrapeGraph
+  (risultati di ricerca pubblici) e dai link pubblicati sui siti delle startup.
 - Niente captcha né aggiramento di controlli anti-bot. Il crawler rispetta `robots.txt`,
   aspetta tra due richieste allo stesso sito e si presenta come `ApeiraScout/2.0`.
 - Le email salvate sono solo quelle pubblicate sui siti; quelle personali (gmail, outlook...) si scartano.
-- Il token del foglio e la chiave Jina stanno solo nei secret, mai nel codice.
+- Il token del foglio, la chiave Jina e la chiave ScrapeGraph stanno solo nei secret, mai nel codice.
 
 ## Cosa è cambiato dalla v1
 

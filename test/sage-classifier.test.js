@@ -92,6 +92,26 @@ test('con la ricerca web di Sage accesa: ricerca, filtra le fonti e poi decide i
   delete process.env.SAGE_GROUNDING_TRIGGER;
 });
 
+test('Sage riceve c.li dal crawler LinkedIn e lo tratta come indizio, non come prova', async () => {
+  responseBody = sageResponse('needs_verification', 0.8, 'medium', 70);
+  const withLinkedin = {
+    ...candidate,
+    li: {
+      disponibile: true, dipendenti: '11-50', fondata: 2025,
+      founders: [{ nome: 'Anna Rossi', ruolo: 'CEO', da: '2025-03', eta: 26, fascia: 'sotto 30', education: { start_year: 2018 } }],
+      testo: '[SG] Dipendenti: 11-50 | Fondata: 2025 | Founder: Anna Rossi (CEO) dal 2025-03 (1 anno), età ~26 (sotto 30)',
+      fonti: ['https://linkedin.com/in/anna'],
+    },
+  };
+  const result = await sage.classify(withLinkedin);
+  const content = requestBody.requests[0].content;
+  assert.match(content, /"linkedin_employees":"11-50"/);
+  assert.match(content, /"start_at_company":"2025-03"/);
+  assert.match(content, /"estimated_age":26/);
+  assert.match(content, /ScrapeGraph search extraction/);
+  assert.equal(result.esito, 'Needs verification');
+});
+
 test('una qualifica Sage incerta viene declassata a Needs verification', async () => {
   responseBody = sageResponse('qualified', 0.7, 'high', 90);
   const result = await sage.classify(candidate);

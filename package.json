@@ -13,6 +13,7 @@
     "classify": "node src/classifiers/run.js",
     "test": "node --test test/*.test.js",
     "founders": "node src/crawlers/founders/index.js",
+    "linkedin": "node src/crawlers/linkedin/index.js",
     "discovery": "node src/crawlers/discovery/index.js"
   },
   "dependencies": {

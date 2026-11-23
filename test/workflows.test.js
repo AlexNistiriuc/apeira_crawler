@@ -4,6 +4,20 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 
+test('crawler LinkedIn esiste e i classificatori ricevono SCRAPEGRAPH_API_KEY', () => {
+  const dir = new URL('../.github/workflows/', import.meta.url);
+  const text = name => readFileSync(new URL(name, dir), 'utf8');
+  const linkedin = text('crawl-linkedin.yml');
+  assert.match(linkedin, /npm run linkedin/);
+  assert.match(linkedin, /SCRAPEGRAPH_API_KEY/);
+  assert.match(linkedin, /SCRAPEGRAPH_MAX_PER_RUN/);
+  for (const file of ['crawl-startups.yml', 'classify-sage.yml', 'classify.yml']) {
+    const workflow = text(file);
+    assert.match(workflow, /SCRAPEGRAPH_API_KEY/, `${file}: manca la chiave ScrapeGraph`);
+    assert.match(workflow, /npm run (classify|founders)/, `${file}: manca il passo che arricchisce`);
+  }
+});
+
 test('nessuna chiave ripetuta negli step dei workflow', () => {
   const dir = new URL('../.github/workflows/', import.meta.url);
   for (const f of readdirSync(dir)) {

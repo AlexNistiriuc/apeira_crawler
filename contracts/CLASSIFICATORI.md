@@ -18,8 +18,33 @@ dopo l'ultima valutazione. Ogni riga ha tutte le colonne di `db_candidati`. Le p
 | `segnali_funding` | frasi su round e importi trovate sul sito |
 | `email`, `linkedin_azienda`, `linkedin_persone`, `founder_nomi` | contatti pubblici |
 | `team_stima`, `domanda_reale` | indizi già leggibili |
+| `eta_stimata`, `fonti_eta`, `eta_il` | arricchimento LinkedIn (dipendenti, fondazione, founder, età dalla prima esperienza educativa) |
 | `evidenze` | JSON con tutto il resto (sotto) |
 | `pagine_lette` | URL delle pagine lette dal crawler, per verificare |
+
+### LinkedIn obbligatorio: `c.li`
+
+Il runner chiama `ensureLinkedin(c)` prima di ogni `classify` e mette il risultato in `c.li`.
+È una black box: l'evaluator non chiama ScrapeGraph e non deve occuparsi della cache. Oggetto:
+
+```js
+c.li = {
+  disponibile: true,
+  fonte: 'scrapegraph' | 'cache',
+  dipendenti: '11-50',
+  fondata: 2025,
+  founders: [{ nome, ruolo, linkedin, da: '2025-03', da_anno: 2025,
+               eta: 24, fascia: 'sotto 30', education: {...} }],
+  testo: '[SG] Dipendenti: 11-50 | Fondata: 2025 | Founder: ...',
+  fonti: ['https://...'],
+}
+```
+
+Se il Fit euristico è `Basso`, `c.li.disponibile` è `false` con `motivo: 'fit Basso'`: i dati
+LinkedIn si pagano solo per Alto/Medio. Se manca la chiave o non si trova nulla, `disponibile` è
+`false` e l'evaluator va avanti con le altre evidenze. `fatal: true` (chiave non valida, credito
+finito) e `tetto: true` (limite per giro) dicono di non insistere. La regola resta: dipendenti e
+età stimata dalla prima esperienza educativa sono **indizi**, non prove per le soglie rigide.
 
 `evidenze` (JSON, versione 2):
 
@@ -76,8 +101,9 @@ sbaglia formato non sporca i dati.
    ufficiale, poi una richiesta batch con reasoning attivo che usa gli snippet trovati per esito,
    fit e voto. Gli URL pertinenti vengono aggiunti a `fonti`. Legge la chiave da `SAGE_API_KEY` e
    usa l'euristico come guardrail per non qualificare quando un criterio rigido manca o è già
-   violato. Sage può usare solo snippet LinkedIn pubblici o link pubblicati dalla startup, senza
-   aprire o leggere pagine LinkedIn; storia lavorativa e range di headcount restano indizi, non prove.
+   violato. Sage riceve anche `c.li` (crawler LinkedIn): dipendenti, anno di fondazione, data di
+   inizio dei founder ed età stimata dalla prima esperienza educativa. Questi dati sono indizi,
+   non prove; storia lavorativa e range di headcount non verificano età o dimensione esatta del team.
 4. **Qualsiasi altro programma** (un altro modello, uno script, una persona con un form):
    chiama la web app con `queue` e `upsert` come descritto in `apps-script/Code.gs`.
 

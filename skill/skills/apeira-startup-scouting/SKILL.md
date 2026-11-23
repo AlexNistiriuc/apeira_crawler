@@ -41,12 +41,14 @@ foundation models, defence.
 
 Evidence rules:
 - Founder age only from credible public statements of age. Never infer it from career history,
-  graduation year or photos. Graduation-based estimates in the evidence are hints for where to look.
+  graduation year or photos. The dedicated LinkedIn crawler writes an education-based estimate in
+  `eta_stimata` (prefixed `[SG]`): use it as a hint for where to look, never as proof.
 - Money in its announced currency with an approximate USD value, labelled grant, equity, prize or
   unknown. "Not disclosed" is not zero.
 - Lab access is one of: no evidence, shared or third-party, institutional, dedicated company lab,
   substantial established lab.
-- Headcount is approximate unless a team page or filing states it. Never derive it from a LinkedIn range.
+- Headcount is approximate unless a team page or filing states it. A LinkedIn range in `eta_stimata`
+  (from the dedicated crawler) is a hint, not a verified headcount.
 - Only publicly listed work emails, preferably a founder's. Never guess email patterns or use personal addresses.
 - First-party sources first. Mark inferences as inferences.
 - Investors, partners and organisations mentioned only as context are not prospects.
@@ -57,6 +59,18 @@ Outcomes:
 - `Needs verification` when funding, lab access, team size or founder age is unknown or ambiguous.
   Never `Qualificata` by assumption. Most rows land here, mostly because founder age is rarely public.
 - When sources contradict each other, say so in `motivo` and do not qualify.
+
+## LinkedIn enrichment (crawler)
+
+`npm run linkedin` and every classifier run enrich Fit Alto/Medio candidates through ScrapeGraph
+(web search + structured extraction, no LinkedIn login). The result is written to `eta_stimata` with
+the `[SG]` prefix, sources in `fonti_eta` and the enrichment date in `eta_il`:
+
+`[SG] Dipendenti: 11-50 | Fondata: 2025 | Founder: Anna Rossi (CEO) dal 2025-03 (1 anno), età ~26 (sotto 30)`
+
+It is a hint. Employee ranges are approximate and ages are derived from the first education entry.
+Never treat either as hard-gate proof. If `eta_stimata` does not start with `[SG]`, there is no
+LinkedIn enrichment for that row.
 
 ## Connecting to the sheet
 
@@ -104,6 +118,7 @@ or when the Sage classifier is unavailable.
    q.map(c => { const e = JSON.parse(c.evidenze || '{}'); return { d: c.dominio, n: c.nome, s: c.sito,
      hub: c.hub_origine, reg: c.dominio_registrato, wb: c.primo_archivio, anni: c.anni_sul_sito,
      fund: c.segnali_funding, team: c.team_stima, em: c.email, fn: c.founder_nomi, li: c.linkedin_persone,
+     age: c.eta_stimata, ageSrc: c.fonti_eta, ageAt: c.eta_il,
      dem: c.domanda_reale, pre: [c.pre_esito, c.pre_fit, c.pre_voto, c.pre_motivo],
      ev: { fa: e.fa, ts: e.ts, evd: e.evd, eu: e.eu, tags: e.tags },
      home: (e.estratto_home || '').slice(0, 1200), teamtxt: (e.estratto_team || '').slice(0, 800) }; })
@@ -115,7 +130,8 @@ or when the Sage classifier is unavailable.
    - founding year, funding, team and founder ages from the startup's site and its pool's page;
    - one `web_search` for `"<name>" founders` or `"<name>" funding` when funding or age is the open
      question, and `web_fetch` on first-party or press results;
-   - LinkedIn only as it appears in search result titles or on the startup's site. Never open
+   - LinkedIn: use the dedicated crawler's `eta_stimata`/`fonti_eta` (`[SG]` prefix: employees,
+     founded year, founder start dates, education-based ages) as discovery hints. Never open
      linkedin.com pages.
    Spend effort where it changes the outcome: a candidate that is clearly `Esclusa` from the
    evidence needs no search. If budget runs out, write what you have as `Needs verification`.
@@ -169,7 +185,8 @@ or when the Sage classifier is unavailable.
 
 ## Rules
 
-- Never browse or scrape LinkedIn. Never bypass captchas or anti-bot checks.
+- Never browse or scrape LinkedIn yourself. The dedicated crawler does the LinkedIn enrichment via
+  ScrapeGraph search results; you only read its `[SG]` output. Never bypass captchas or anti-bot checks.
 - Never print or retype the sheet token or the Jina key.
 - Don't delete rows from `db_*` tabs. To discard, use `stato` (hubs) or a grade (startups).
 - Write to Alex in Italian, concise.

@@ -36,17 +36,21 @@ export default {
     if (lab.k === 'own') ex.push('lab di proprietà');
     else if (lab.k === 'shared') ver.push('accesso lab');
 
-    // team
+    // team: il numero LinkedIn resta un indizio, non una soglia rigida
+    const li = c.li && c.li.disponibile ? c.li : null;
+    const liTeam = li?.dipendenti ? `LinkedIn ${li.dipendenti}` : '';
     const tm = teamEstimate(ev.ts);
     if (tm.n == null) ver.push('dimensione team');
     else if (tm.n > C.max_team_size && tm.k !== 'r') ex.push(`team oltre ${C.max_team_size} (${tm.txt})`);
     else if (tm.n > C.max_team_size) ver.push('dimensione team');
 
-    // età: conta solo se dichiarata
+    // età: conta solo se dichiarata. La stima LinkedIn (prima esperienza educativa) è un indizio.
     const ages = ev.fa?.a || [];
+    const liAges = (li?.founders || []).map(f => `${f.nome}${f.ruolo ? ` (${f.ruolo})` : ''}: ${f.eta != null ? `~${f.eta} (${f.fascia})` : 'n.d.'}${f.da ? `, dal ${f.da}` : ''}`);
     let eta;
     if (ages.length) { eta = 'età dichiarate sul sito: ' + ages.join(', '); if (Math.max(...ages) > C.max_founder_age) ex.push(`founder con ${C.max_founder_age + 1}+ anni`); }
     else { eta = 'non verificata · stima: ' + founderAgeLabel(ev.fa); ver.push('età founder'); }
+    if (liAges.length) eta += ' · LinkedIn: ' + liAges.join('; ');
     const u30 = ages.length > 0 && Math.max(...ages) <= C.priority_founder_age;
 
     // domanda reale: solo un indizio, il giudizio vero richiede un modello o una persona
@@ -66,10 +70,12 @@ export default {
 
     const voto = Math.max(0, Math.min(100, (esito === 'Qualificata' ? 60 : esito === 'Needs verification' ? 35 : 0) + (fit === 'Alto' ? 25 : fit === 'Medio' ? 12 : 0) + Math.min(Math.max(score, 0), 15) - (esito === 'Esclusa' ? 100 : 0)));
 
+    const fondTxt = li?.fondata ? `${fond} · LinkedIn: ${li.fondata}` : fond;
+    const teamTxt = [tm.txt, liTeam].filter(Boolean).join(' · ');
     return {
       esito, fit, voto,
       motivo: ex.length ? ex.join('; ') : ver.length ? 'da verificare: ' + ver.join(', ') : (u30 ? 'tutti i criteri, founder sotto 30' : 'tutti i criteri'),
-      fondazione: fond, grant: m.grantTxt, investimenti: m.invTxt, accesso_lab: lab.txt, team: tm.txt, eta_founder: eta,
+      fondazione: fondTxt, grant: m.grantTxt, investimenti: m.invTxt, accesso_lab: lab.txt, team: teamTxt, eta_founder: eta,
       under30: u30 ? 'sì' : 'no',
       domanda_reale: dem ? 'indizi sul sito: ' + ev.dem.slice(0, 2).join(' | ').slice(0, 300) : 'nessun indizio',
       da_verificare: ver.join(', '),

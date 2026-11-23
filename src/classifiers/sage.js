@@ -78,6 +78,15 @@ export function trim(value, max) {
 
 function candidateContent(c, baseline, webResearch = [], site = null) {
   const ev = c.ev || {};
+  const li = c.li && c.li.disponibile ? {
+    employees: c.li.dipendenti || null,
+    founded_year: c.li.fondata || null,
+    founders: (c.li.founders || []).map(f => ({
+      name: f.nome, role: f.ruolo, start_at_company: f.da,
+      estimated_age: f.eta, age_band: f.fascia, education: f.education,
+    })),
+    summary: trim(c.li.testo, 1500),
+  } : null;
   const policy = {
     founded: `${C.min_founded_year}-${C.max_founded_year}`,
     max_grants_usd: C.max_grants_usd,
@@ -95,12 +104,13 @@ function candidateContent(c, baseline, webResearch = [], site = null) {
     website_age: { registered: c.dominio_registrato, first_archive: c.primo_archivio, years_on_site: c.anni_sul_sito, declared_years: ev.anni_dichiarati },
     funding: { visible_signals: trim(c.segnali_funding, 1000), structured: ev.fund, amounts: ev.evd && { grants: ev.evd.g, investments: ev.evd.i } },
     lab: ev.evd && { company_owned: ev.evd.lc, shared_or_institutional: ev.evd.lx },
-    team: { estimate: c.team_stima, structured: ev.ts },
+    team: { estimate: c.team_stima, structured: ev.ts, linkedin_employees: li?.employees || null },
     founders: {
       names: c.founder_nomi,
       ages: ev.fa && ev.fa.a,
       age_evidence: ev.fa && ev.fa.ev,
       linkedin_links_published_by_startup: trim(c.linkedin_persone, 1500),
+      linkedin_enrichment: li,
     },
     demand: { summary: trim(c.domanda_reale, 1000), evidence: ev.dem },
     public_contact_available: Boolean(c.email || c.linkedin_persone),
@@ -121,6 +131,7 @@ function candidateContent(c, baseline, webResearch = [], site = null) {
       'Use the supplied web research only for this exact startup. Prefer first-party pages, filings and credible press; ignore namesakes and generic startup-advice pages.',
       'LinkedIn may be checked only through public search-result snippets or LinkedIn links already published on the startup website. Never open or scrape linkedin.com.',
       'LinkedIn career history and headcount ranges are discovery hints only. They never verify founder age or exact team size.',
+      'LinkedIn enrichment from the dedicated crawler (ScrapeGraph search extraction) is discovery evidence: education-derived ages and employee ranges are estimates, not hard-gate proof.',
       'A proven threshold violation means Esclusa. Any missing or contradictory hard-gate fact means Needs verification.',
       'Real demand, technical founders, Europe and target sector affect fit and score, not the hard-gate outcome.',
     ],
