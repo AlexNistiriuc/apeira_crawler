@@ -44,6 +44,7 @@ export function loadGas() {
   };
   vm.createContext(ctx);
   vm.runInContext(readFileSync(new URL('../apps-script/Code.gs', import.meta.url), 'utf8'), ctx);
+  vm.runInContext(readFileSync(new URL('../apps-script/Appoggio.gs', import.meta.url), 'utf8'), ctx);
   ctx.setup();
   const token = props.get('API_TOKEN');
   /** backend per src/lib/sheet.js */
