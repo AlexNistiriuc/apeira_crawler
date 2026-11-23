@@ -24,7 +24,7 @@ const trim = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
 /** Compatibilità: solo CEO e CTO. */
 export const ceoCto = founders => pickPeople(founders).filter(p => p.ruolo !== 'founder');
 
-/** Per ogni startup il giudizio del valutatore con la precedenza (sage, claude, euristico); fuori le escluse e l'euristico con fit Basso. */
+/** Per ogni startup il giudizio del valutatore con la precedenza (sage, claude, euristico); fuori le escluse e le Basso di qualsiasi valutatore (niente crediti su startup fuori target). */
 export function pickBest(evals, n) {
   const by = {};
   for (const v of evals) {
@@ -32,7 +32,7 @@ export function pickBest(evals, n) {
     if (p === undefined) continue;
     if (!by[v.dominio] || p < by[v.dominio]._p) by[v.dominio] = { ...v, _p: p };
   }
-  return Object.values(by).filter(v => v.esito !== 'Esclusa' && !(v.classificatore === 'euristico' && v.fit === 'Basso'))
+  return Object.values(by).filter(v => v.esito !== 'Esclusa' && v.fit !== 'Basso')
     .sort((a, b) => (FIT[a.fit] ?? 3) - (FIT[b.fit] ?? 3) || a._p - b._p || Number(b.voto) - Number(a.voto)).slice(0, n);
 }
 
