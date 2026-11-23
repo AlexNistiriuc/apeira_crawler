@@ -116,6 +116,11 @@ export default {
     const jobs = +(ev.sito?.posizioni_aperte || 0);
     if (jobs >= 3) { note.push(`${jobs} posizioni aperte sul sito: team probabilmente oltre ${C.max_team_size}`); ver.push('team (posizioni aperte)'); fit = down(fit); }
     if (jobs >= 8) fit = down(fit);
+    // progetto di ricerca e non startup (consorzio, Horizon, disseminazione): fit Basso finché non si chiarisce
+    const siteText = [ev.estratto_home, ev.estratto_about, ev.estratto_blog, ev.estratto_tech].join(' ');
+    if (/\b(consortium|consorzio|horizon (2020|europe)|grant agreement|this project has received funding|dissemination|work package|fet-?open|project partners|project coordinator)\b/i.test(siteText)) {
+      note.push('il sito sembra di un progetto di ricerca, non di una startup'); ver.push('natura (progetto o startup)'); fit = 'Basso';
+    }
     if (phaseDown) fit = down(fit);
     if (eta.startsWith('non verificata') && /35 o più/.test(c.eta_stimata || '')) fit = down(fit); // stima: ordina, non esclude
 

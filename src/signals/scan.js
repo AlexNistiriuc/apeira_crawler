@@ -61,6 +61,8 @@ export function analyze(t) {
   const byName = new Map();
   while ((m = fre.exec(t)) && byName.size < 5) {
     const nm = m[1].trim(); if (/^(The|Our|Meet|About|Team|Contact|Join|Read|Learn|Co|Founder)\b/.test(nm)) continue;
+    // titoli e ruoli scambiati per nomi (es. "Geschäftsführer Dr", "Managing Director")
+    if (/\b(Geschäftsführer\w*|Gesch|Dr|Prof|Dipl|Ing|Managing|Director|Head|Board|Advisor|Officer|Chief|Partner|Gérant|Président|Amministratore|Fondatore|Gründer\w*|Vorstand|Inhaber)\b\.?/i.test(nm)) continue;
     // "Co-founder & CEO": il ruolo vero può stare subito dopo
     const r = ROLE(m[2] + ' ' + t.slice(fre.lastIndex, fre.lastIndex + 20).split('\n')[0]); const prev = byName.get(nm);
     if (!prev || prev === 'co-founder') byName.set(nm, r);

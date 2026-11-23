@@ -35,6 +35,12 @@ async function deepRead(c, s, own, pages, texts) {
   let queue = own.filter(([tx, l]) => !SKIP.test(l)).map(([tx, l]) => ({ l: l.split('#')[0], k: kindOf(l, tx) }));
   const rank = k => ({ careers: 0, blog: 1, investors: 2, about: 3, tech: 4, altro: 9 })[k];
   const out = { lette: 0, grande: big, posizioni: 0, per_tipo: {} };
+  // righe che compaiono già in home (menu, footer, cookie): si tolgono dagli estratti delle altre pagine
+  const norm = x => x.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[#*_>`|]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  const common = new Set(String(texts.home || '').split('\n').map(norm).filter(x => x.length > 2));
+  const ownText = t => String(t || '').split('\n').filter(l => { const n = norm(l); return n.length > 2 && !common.has(n); }).join('\n');
+  const CAP = { careers: 3, blog: 4, investors: 2, about: 3, tech: 2, altro: 3 };   // varietà: non tutto il budget su un tipo
+  let jina = 3;   // siti in JavaScript: le prime pagine importanti anche via Jina
   const max = big ? Math.min(8, SITE_MAX_PAGES) : SITE_MAX_PAGES;
   while (queue.length && out.lette < max && Date.now() - t0 < SITE_BUDGET_MS) {
     queue.sort((a, b) => rank(a.k) - rank(b.k));
@@ -43,11 +49,14 @@ async function deepRead(c, s, own, pages, texts) {
     if (seen.has(key)) continue;
     seen.add(key);
     if (big && k === 'altro') continue;
-    const r = await getPage(l, { jinaFallback: false, timeoutMs: 15000 });
+    if ((out.per_tipo[k] || 0) >= CAP[k]) continue;
+    const useJina = jina > 0 && k !== 'altro';
+    const r = await getPage(l, { jinaFallback: useJina, maxJinaBacklog: 12, timeoutMs: 15000 });
+    if (useJina && r.via === 'jina') jina--;
     if (r.status !== 200 || !r.text) continue;
     out.lette++; pages.push(l);
     scanPage(s, r.text, {});
-    texts[k] = ((texts[k] || '') + ' ' + r.text).slice(0, 20000);
+    texts[k] = ((texts[k] || '') + '\n' + ownText(r.text)).slice(0, 20000);
     out.per_tipo[k] = (out.per_tipo[k] || 0) + 1;
     if (k === 'careers') out.posizioni = Math.max(out.posizioni, new Set((r.text.match(JOB) || []).map(x => x.toLowerCase())).size + Math.max(0, (r.text.match(/\b(apply|bewerben|candidati|postuler)\b/gi) || []).length - 1));
     // un livello in più: link del sito trovati in questa pagina (utile per articoli del blog e singole posizioni)
