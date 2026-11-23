@@ -153,3 +153,11 @@ test('profili tipo Caplight: "Grant · ... · Total Funding Raised · $6.44M" re
   const g = newsFunding([{ url: 'https://caplight.com/company/diasense', title: 'DiaSense | Valuation, Funding Rounds', snippet: 'Copenhagen Last Round · Grant · Mar 17, 2026 · Total Funding Raised · $6.44M · DiaSense is a deep-tech company' }], 'DiaSense', 'diasense.dk');
   assert.ok(g.grant_usd >= 6e6 || g.inv_usd >= 6e6);
 });
+
+test('età: "12 years in biotech" è esperienza, non età', () => {
+  const p = { nome: 'Elias Hagmann', ruolo: 'CEO' };
+  const e = estimateAge('Elias Hagmann', [{ snippet: 'Elias Hagmann Co-Founder & CEO 12 years in biotech industry', url: 'u' }], 2026);
+  assert.equal(verifiedFromEstimate(p, e), null);
+  assert.equal(verifiedFromEstimate(p, estimateAge('Anna Rossi', [{ snippet: 'Anna Rossi, 24 years old, founded Qubo', url: 'u' }], 2026)) , null, 'nome diverso');
+  assert.equal(verifiedFromEstimate({ nome: 'Anna Rossi' }, estimateAge('Anna Rossi', [{ snippet: 'Anna Rossi, 24 years old, founded Qubo', url: 'u' }], 2026)).max, 24);
+});

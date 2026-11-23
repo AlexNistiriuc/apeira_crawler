@@ -27,7 +27,8 @@ export const founderCount = founders => String(founders || '').split(', ').filte
  * dichiarati in una frase che contiene nome E cognome. Anno di laurea, studente, 30 under 30: restano stime.
  */
 export function verifiedFromEstimate(person, e, year = new Date().getFullYear()) {
-  if (!e || e.eta == null || !/età dichiarata|anno di nascita/.test(e.tipo || '')) return null;
+  if (!e || e.eta == null || e.eta < 16 || !/età dichiarata|anno di nascita/.test(e.tipo || '')) return null;
+  if (/\byears? (in|of|at|with|experience)\b|\banni di\b|\bjahre (in|erfahrung)\b/i.test(e.prova || '')) return null;   // "12 years in biotech" è esperienza, non età
   const words = fold(person.nome).split(/\s+/).filter(w => w.length > 1);
   const prova = fold(e.prova);
   if (words.length < 2 || !words.every(w => prova.includes(w))) return null;
