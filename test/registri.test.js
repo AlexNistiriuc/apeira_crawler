@@ -61,7 +61,7 @@ test('scoperta da registro: solo società giovani con sito, segnate per non rile
   assert.equal(c.stato_crawler, 'da_ricontrollare');
   assert.equal(JSON.parse(c.eta_verificate)[0].fonte, 'registro imprese NO');
   assert.equal(JSON.parse(c.registro).costituita, '2025-06-01');
-  assert.equal((await read('db_scoperta')).filter(r => r.tipo === 'registro').length, 3, 'tutte e tre segnate');
+  assert.equal((await read('db_scoperta')).filter(r => r.tipo === 'registro' && !/giorno/.test(r.query)).length, 3, 'tutte e tre segnate');
   const again = await run({ log: () => {} });
   assert.equal(again.societa_lette, 0, 'al giro dopo non si rileggono');
 });
@@ -90,4 +90,20 @@ test('Francia: gli imprenditori individuali (COGNOME, Nome) non sono società', 
     { dateparution: '2025-09-01', commercant: 'GAUBE, Alexia Aurelie', registre: ['912345671'] },
     { dateparution: '2025-09-01', commercant: 'POPN\'DRIVE', registre: ['912345672'] }] }));
   assert.deepEqual((await franceSearch('robotique', '2025-01-01')).items.map(x => x.nome), ["POPN'DRIVE"]);
+});
+
+test('Lettonia: età dal codice personale mascherato, filtro sul nome, solo SIA e AS attive', async () => {
+  const { latviaAge } = await import('../src/lib/registry.js');
+  const { latviaCompanies, splitCsv } = await import('../src/crawlers/registri/lettonia.js');
+  const today = new Date(Date.UTC(2026, 10, 23));
+  assert.deepEqual(latviaAge('140797-*****', '', today), { min: 29, max: 29 });
+  assert.deepEqual(latviaAge('010203-*****', '', today), { min: 23, max: 23 });
+  assert.equal(latviaAge('321234-*****', '', today), null, 'codice nuovo senza data');
+  assert.deepEqual(splitCsv('1;"A ""B"" C";x'), ['1', 'A "B" C', 'x']);
+  const reg = 'regcode;name;name_in_quotes;type;registered;terminated;closed\n40200000001;"SIA ""Orbit Robotics""";Orbit Robotics;SIA;2025-05-02;;\n40200000002;"SIA ""Maizes Ceptuve""";Maizes Ceptuve;SIA;2025-05-02;;\n40200000003;"SIA ""Old Tech""";Old Tech;SIA;2019-01-01;;\n';
+  const off = 'at_legal_entity_registration_number;entity_type;position;governing_body;name;latvian_identity_number_masked;birth_date\n40200000001;NATURAL_PERSON;BOARD_MEMBER;EXECUTIVE_BOARD;Janis Berzins;140797-*****;\n';
+  const f = async url => new Response(String(url).includes('officers') ? off : reg);
+  const list = await latviaCompanies('2025-01-01', /robot|tech/i, f);
+  assert.deepEqual(list.map(x => x.nome), ['Orbit Robotics']);
+  assert.equal(list[0].persone[0].nome, 'Janis Berzins'); assert.ok(list[0].persone[0].max <= 30);
 });

@@ -10,7 +10,8 @@ import { read, upsert, logRun, TABS } from '../../lib/sheet.js';
 import { now } from '../../lib/config.js';
 import { CRITERIA as C } from '../../lib/config.js';
 import { reg, host, bad } from '../../lib/url.js';
-import { norwaySearch, norwayPeople, ukSearch, ukPeople, franceSearch, francePeople, normName, registryStats } from '../../lib/registry.js';
+import { norwaySearch, norwayPeople, ukSearch, ukPeople, franceSearch, francePeople, finlandSearch, normName, registryStats } from '../../lib/registry.js';
+import { latviaCompanies } from './lettonia.js';
 import { webSearch, searchEnabled, searchLog } from '../../lib/search.js';
 import { sleep } from '../../lib/http.js';
 
@@ -49,18 +50,19 @@ export async function run({ log = console.log, dry = process.env.DRY === '1' } =
   const out = [], seenRows = [];
   let budget = CFG.max_societa_per_giro;
 
-  async function consider(r, people, codice) {
+  async function consider(r, people, codice, { senzaEta = false } = {}) {
     if (seenReg.has(key(r))) return;
     st.societa_lette++; budget--;
     seenReg.add(key(r));
     const mark = esito => seenRows.push({ query: key(r), tipo: 'registro', settore: codice, luogo: r.paese, livello: 'registro', usata_il: now().slice(0, 10), risultati: 1, hub_nuovi: esito === 'in coda' ? 1 : 0, hub_utili: 0 });
-    const persone = await people(r.numero);
-    if (!allYoung(persone)) return mark(persone.length ? 'amministratori 35+' : 'senza età');
-    st.giovani++;
+    const persone = senzaEta ? [] : await people(r.numero);
+    if (!senzaEta && !allYoung(persone)) return mark(persone.length ? 'amministratori 35+' : 'senza età');
+    if (!senzaEta) st.giovani++;
     let dom = siteDomain(r.sito);
-    if (!dom && searchEnabled() && st.ricerche_sito < CFG.ricerche_sito_per_giro) {
+    // registri senza età (Finlandia): niente ricerca del sito, si prende solo quello scritto nel registro
+    if (!dom && !senzaEta && searchEnabled() && st.ricerche_sito < CFG.ricerche_sito_per_giro) {
       st.ricerche_sito++;
-      const paese = { UK: 'UK', NO: 'Norway', FR: 'France' }[r.paese] || '';
+      const paese = { UK: 'UK', NO: 'Norway', FR: 'France', LV: 'Latvia', FI: 'Finland' }[r.paese] || '';
       dom = siteFromResults(r.nome, await webSearch(`"${r.nome.replace(/\b(ltd|limited|as|sas|sasu|sarl)\b\.?/gi, '').trim()}" ${paese}`, { count: 5 }));
       if (dom) st.siti_da_ricerca++;
     }
@@ -72,10 +74,10 @@ export async function run({ log = console.log, dry = process.env.DRY === '1' } =
     const registro = { paese: r.paese, numero: r.numero, nome: r.nome, costituita: r.costituita, aumenti_capitale: [], persone: persone.map(p => ({ nome: p.nome, ruolo: p.ruolo, min: p.min, max: p.max })), url: r.url || (r.paese === 'UK' ? `https://find-and-update.company-information.service.gov.uk/company/${r.numero}` : '') };
     out.push({
       dominio: dom, nome: r.nome, sito: `https://${dom}/`, hub_origine: `registro ${r.paese} codice ${codice}`, primo_visto: now(), ultimo_check: now(),
-      stato_crawler: 'da_ricontrollare', motivo: `dal registro ${r.paese}: costituita ${r.costituita}, amministratori sotto ${C.max_founder_age + 1} anni`,
+      stato_crawler: 'da_ricontrollare', motivo: `dal registro ${r.paese}: costituita ${r.costituita}` + (senzaEta ? ', età non nel registro' : `, amministratori sotto ${C.max_founder_age + 1} anni`),
       founder_nomi: persone.map(p => p.nome).join(', '),
       registro: JSON.stringify(registro),
-      eta_verificate: JSON.stringify(persone.map(p => ({ nome: p.nome, ruolo: p.ruolo, min: p.min, max: p.max, fonte, url: registro.url }))),
+      ...(senzaEta ? {} : { eta_verificate: JSON.stringify(persone.map(p => ({ nome: p.nome, ruolo: p.ruolo, min: p.min, max: p.max, fonte, url: registro.url }))) }),
     });
     st.nuove_in_coda++;
     st.per_codice[codice] = (st.per_codice[codice] || 0) + 1;
@@ -103,6 +105,21 @@ export async function run({ log = console.log, dry = process.env.DRY === '1' } =
       await consider(r, francePeople, `FR "${kw}"`); await sleep(250);
     }
     if (p + 1 >= pagine) break;
+  }
+
+  // Finlandia: registro senza età; entrano solo le società con il sito scritto nel registro
+  for (const code of CFG.finlandia_codici || []) for (let p = 1; p <= CFG.pagine_per_codice && budget > 0; p++) {
+    const { items, pagine } = await finlandSearch(code, CFG.costituite_dal, p);
+    for (const r of items) { if (budget <= 0) break; if (!r.sito) continue; await consider(r, null, `FI ${code}`, { senzaEta: true }); }
+    if (p >= pagine) break;
+  }
+  // Lettonia: due file grandi (circa 170 MB), una volta al giorno; età dal codice personale, nome deep tech
+  const lvKey = `registro LV giorno ${now().slice(0, 10)}`;
+  if (CFG.lettonia_parole_nome && !seenReg.has(lvKey) && budget > 0) {
+    const list = await latviaCompanies(CFG.costituite_dal, new RegExp(CFG.lettonia_parole_nome, 'i'));
+    st.lettonia_societa = list.length;
+    for (const r of list) { if (budget <= 0) break; const persone = r.persone; await consider(r, async () => persone, 'LV nome'); }
+    seenRows.push({ query: lvKey, tipo: 'registro', settore: 'LV', luogo: 'LV', livello: 'registro', usata_il: now().slice(0, 10), risultati: list.length, hub_nuovi: 0, hub_utili: 0 });
   }
 
   if (!dry && out.length) await upsert(TABS.cand, 'dominio', out);

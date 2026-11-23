@@ -51,5 +51,19 @@
     "intelligence artificielle embarquée"
   ],
   "francia_escludi": "formation|enseignement|coaching|conseil|consulting|immobili|restaura|coiffure|transport de|nettoyage|bâtiment|batiment|commerce de détail|vente en ligne|holding|location",
-  "_nota_francia": "Francia (23 nov 2026): BODACC (creazioni, senza chiave) per parola dell'attività, poi dirigenti con anno e mese di nascita da recherche-entreprises. Repubblica Ceca: ARES non filtra per data di costituzione e rifiuta oltre 1.000 risultati, quindi solo ricerca per nome nel crawler founder."
+  "_nota_francia": "Francia (23 nov 2026): BODACC (creazioni, senza chiave) per parola dell'attività, poi dirigenti con anno e mese di nascita da recherche-entreprises. Repubblica Ceca: ARES non filtra per data di costituzione e rifiuta oltre 1.000 risultati, quindi solo ricerca per nome nel crawler founder.",
+  "finlandia_codici": [
+    "72100",
+    "26110",
+    "26200",
+    "26510",
+    "26600",
+    "27200",
+    "28990",
+    "30300",
+    "21200",
+    "32500"
+  ],
+  "lettonia_parole_nome": "tech|lab|robot|bio|quant|space|aero|drone|photon|laser|semi|chip|energ|fusion|nano|materia|medtech|dynamics|science|research|engineering|systems|ai\\b|\\bai|innovat|sensor|optic|cyber|defen|satellit|rocket|batter|hydrogen",
+  "_nota_altri_paesi": "Finlandia (PRH): data e attività ma niente età, entrano solo con il sito nel registro. Lettonia: età dal codice personale, niente attività, filtro sul nome, una volta al giorno. Esclusi per ora perché servono registrazione, pagamento o non c'è un'API aperta: Germania, Austria, Svizzera (Zefix richiede account), Paesi Bassi, Belgio (KBO richiede account), Danimarca, Svezia, Irlanda, Spagna, Portogallo, Italia (report startup innovative dietro sessione), Polonia (KRS senza data di nascita e senza ricerca per data), Estonia (open data in file da decine di MB, da fare)."
 }

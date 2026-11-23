@@ -11,7 +11,9 @@ import { sleep } from './http.js';
 let impl = (...a) => fetch(...a);
 /** Solo per i test. */
 export function setRegistryFetch(fn) { impl = fn; }
-export const registryStats = { fr: 0, uk: 0, no: 0, cz: 0, trovate: 0, errori: 0 };
+/** Il fetch dei registri (quello dei test, se impostato). */
+export const registryFetch = (...a) => impl(...a);
+export const registryStats = { fr: 0, uk: 0, no: 0, cz: 0, fi: 0, lv: 0, trovate: 0, errori: 0 };
 
 const LEGAL = /\b(sas|sasu|sarl|sa|eurl|sci|ltd|limited|plc|llp|gmbh|ug|bv|ab|oy|srl|spa|inc|corp|co|company|as|asa|s r o|sro|a s)\b\.?/gi;
 
@@ -102,6 +104,35 @@ export async function franceSearch(keyword, from, offset = 0, limit = 100) {
   // fuori gli imprenditori individuali ("COGNOME, Nome"): liberi professionisti, non società
   }).filter(x => x.numero.length === 9 && x.nome && !/,/.test(x.nome));
   return { items, pagine: Math.ceil((j?.total_count || 0) / limit) };
+}
+
+const PRH = () => process.env.PRH_BASE || 'https://avoindata.prh.fi/opendata-ytj-api/v3';
+
+/** Finlandia (PRH, senza chiave): società registrate dal giorno indicato con un codice di attività. Senza età. */
+export async function finlandSearch(code, from, page = 1) {
+  registryStats.fi = (registryStats.fi || 0) + 1;
+  const j = await getJson(`${PRH()}/companies?registrationDateStart=${from}&mainBusinessLine=${encodeURIComponent(code)}&page=${page}`);
+  const items = (j?.companies || []).filter(c => !c.tradeRegisterStatus || String(c.tradeRegisterStatus) === '1' || !/lopet|konkurs|dissol/i.test(JSON.stringify(c.companySituations || []))).map(c => {
+    const name = (c.names || []).find(n => !n.endDate)?.name || c.names?.[0]?.name || '';
+    const desc = (c.mainBusinessLine?.descriptions || []).find(d => d.languageCode === '3')?.description || '';
+    return { paese: 'FI', numero: c.businessId?.value || '', nome: name, costituita: c.registrationDate || c.businessId?.registrationDate || '', attivita: `${c.mainBusinessLine?.type || ''} ${desc}`.trim(), sito: c.website?.url || '', url: `https://tietopalvelu.ytj.fi/yritys/${c.businessId?.value || ''}` };
+  }).filter(x => x.numero && x.nome);
+  return { items, pagine: Math.ceil((j?.totalResults || 0) / 100) };
+}
+
+/**
+ * Lettonia (open data del registro, senza chiave): data di nascita dal codice personale mascherato
+ * (GGMMAA-*****, i codici nuovi che iniziano con 32 non la contengono) o dal campo birth_date.
+ */
+export function latviaAge(masked, birthDate, today = new Date()) {
+  if (birthDate) { const [y, m] = String(birthDate).split('-').map(Number); if (y) return ageFrom(y, m, today); }
+  const m = String(masked || '').match(/^(\d{2})(\d{2})(\d{2})-/);
+  if (!m || m[1].startsWith('32')) return null;
+  const dd = +m[1], mm = +m[2], yy = +m[3];
+  if (dd < 1 || dd > 31 || mm < 1 || mm > 12) return null;
+  const nowYY = today.getUTCFullYear() % 100;
+  const y = yy <= nowYY - 16 ? 2000 + yy : 1900 + yy;   // chi ha meno di 16 anni non è amministratore
+  return ageFrom(y, mm, today);
 }
 
 /** Regno Unito. Senza COMPANIES_HOUSE_KEY restituisce null. */
