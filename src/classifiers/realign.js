@@ -1,17 +1,22 @@
 // Riallinea le valutazioni già scritte al criterio severo (strict.js), per tutti i classificatori.
 // Non cancella righe: Alto senza prove → Medio (con cosa manca nel motivo), Esclusa → fit Basso.
+// Tocca solo i classificatori automatici (euristico, sage). Le righe `claude` le scrivono Claude e gli
+// agenti dopo aver controllato le fonti a mano (età da registri che il crawler non ha): non si toccano.
 // Uso: npm run realign            (DRY=1 per vedere solo i conteggi)
 import { read, upsert, views, logRun, TABS } from '../lib/sheet.js';
 import { now } from '../lib/config.js';
 import { applyStrict } from './strict.js';
 
+export const AUTOMATICI = ['euristico', 'sage'];
+
 export async function realign({ dry = false, log = console.log } = {}) {
   const startedAt = now();
   const evals = await read(TABS.eval);
   const cands = new Map((await read(TABS.cand)).map(c => [c.dominio, c]));
-  const st = { valutazioni: evals.length, alto_prima: 0, alto_dopo: 0, declassate: 0, esclusa_a_basso: 0, per_classificatore: {} };
+  const st = { valutazioni: evals.length, solo: AUTOMATICI.join(','), alto_prima: 0, alto_dopo: 0, declassate: 0, esclusa_a_basso: 0, per_classificatore: {} };
   const changed = [];
   for (const e of evals) {
+    if (!AUTOMATICI.includes(e.classificatore)) continue;
     if (e.fit === 'Alto') st.alto_prima++;
     if (e.fit !== 'Alto' && !(e.esito === 'Esclusa' && e.fit !== 'Basso')) continue;
     const c = cands.get(e.dominio);

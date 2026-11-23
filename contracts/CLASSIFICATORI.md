@@ -48,7 +48,9 @@ Il criterio sta in `src/classifiers/strict.js` e vale per tutti:
   Alto senza tutte le prove diventa Medio con "per Alto manca: ..." nel motivo e in `da_verificare`;
 - chi scrive a mano (Claude dal browser, una persona) deve seguire la stessa tabella;
 - `npm run realign` (o il workflow "classificatore euristico" con `riallinea = 1`) riallinea le
-  valutazioni già nel foglio, senza cancellare righe.
+  valutazioni già nel foglio dei classificatori automatici (euristico, sage), senza cancellare righe.
+  Le righe `claude` non le tocca: le scrivono Claude e gli agenti dopo aver controllato le fonti, spesso
+  con età da registri che il crawler non ha.
 
 ### Regole per i valutatori (Sage e Claude)
 - Si valuta solo dopo il crawler founder (`fatti_il` presente). Senza fatti niente fit Alto, e anche con i fatti vale il criterio severo qui sopra.

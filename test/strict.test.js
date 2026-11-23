@@ -53,7 +53,7 @@ test('euristico: Alto solo con le prove, senza età dei founder resta Medio', as
   assert.match(ko.motivo, /per Alto manca: età verificata di ogni founder/);
 });
 
-test('riallineamento: declassa gli Alto senza prove di ogni classificatore, non tocca gli altri', async () => {
+test('riallineamento: declassa gli Alto automatici senza prove, non tocca le righe claude', async () => {
   const { loadGas } = await import('./gas-mock.js');
   const { setSheetBackend, upsert, read } = await import('../src/lib/sheet.js');
   const { realign } = await import('../src/classifiers/realign.js');
@@ -67,12 +67,14 @@ test('riallineamento: declassa gli Alto senza prove di ogni classificatore, non 
   await upsert('db_valutazioni', 'id', [
     { ...ev0, id: 'qubo.ai|claude', dominio: 'qubo.ai', classificatore: 'claude', fit: 'Alto' },
     { ...ev0, id: 'nofacts.ai|claude', dominio: 'nofacts.ai', classificatore: 'claude', fit: 'Alto' },
+    { ...ev0, id: 'nofacts.ai|sage', dominio: 'nofacts.ai', classificatore: 'sage', fit: 'Alto' },
     { ...ev0, id: 'nofacts.ai|euristico', dominio: 'nofacts.ai', classificatore: 'euristico', fit: 'Medio', esito: 'Esclusa', voto: 0 },
   ]);
   const st = await realign({ log: () => {} });
-  assert.equal(st.alto_prima, 2); assert.equal(st.alto_dopo, 1); assert.equal(st.declassate, 1); assert.equal(st.esclusa_a_basso, 1);
+  assert.equal(st.alto_prima, 1); assert.equal(st.alto_dopo, 0); assert.equal(st.declassate, 1); assert.equal(st.esclusa_a_basso, 1);
   const by = Object.fromEntries((await read('db_valutazioni')).map(r => [r.id, r]));
   assert.equal(by['qubo.ai|claude'].fit, 'Alto');
-  assert.equal(by['nofacts.ai|claude'].fit, 'Medio');
+  assert.equal(by['nofacts.ai|claude'].fit, 'Alto', 'righe claude: controllate a mano, non si toccano');
+  assert.equal(by['nofacts.ai|sage'].fit, 'Medio');
   assert.equal(by['nofacts.ai|euristico'].fit, 'Basso');
 });
