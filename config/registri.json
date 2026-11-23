@@ -30,7 +30,7 @@
     "26400"
   ],
   "pagine_per_codice": 10,
-  "max_societa_per_giro": 150,
+  "max_societa_per_giro": 250,
   "ricerche_sito_per_giro": 20,
   "_nota_memoria": "Ogni società letta si segna in db_scoperta (tipo registro): non si rilegge e la ricerca del sito non si ripaga.",
   "_nota_ricerche": "Una ricerca ScrapeGraph per trovare il sito di una società senza sito nel registro, solo se tutti gli amministratori hanno meno di 35 anni. È l'unico costo in crediti.",
@@ -65,5 +65,28 @@
     "32500"
   ],
   "lettonia_parole_nome": "\\b(robot\\w*|robotic\\w*|quantum|space|aero\\w*|drone\\w*|photon\\w*|laser\\w*|semicond\\w*|chips?|fusion|nano\\w*|bio\\w*|medtech|dynamics|sensors?|optic\\w*|satellit\\w*|rocket\\w*|batter\\w*|hydrogen|materials?|deep ?tech|defen[cs]e|autonom\\w*|neuro\\w*|genom\\w*|cell|thera\\w*)\\b",
-  "_nota_altri_paesi": "Finlandia (PRH): data e attività ma niente età, entrano solo con il sito nel registro. Lettonia: età dal codice personale, niente attività, filtro sul nome, una volta al giorno. Esclusi per ora perché servono registrazione, pagamento o non c'è un'API aperta: Germania, Austria, Svizzera (Zefix richiede account), Paesi Bassi, Belgio (KBO richiede account), Danimarca, Svezia, Irlanda, Spagna, Portogallo, Italia (report startup innovative dietro sessione), Polonia (KRS senza data di nascita e senza ricerca per data), Estonia (open data in file da decine di MB, da fare)."
+  "_nota_altri_paesi": "Finlandia (PRH): data e attività ma niente età, entrano solo con il sito nel registro. Lettonia: età dal codice personale, niente attività, filtro sul nome, una volta al giorno. Esclusi per ora perché servono registrazione, pagamento o non c'è un'API aperta: Germania, Austria, Svizzera (Zefix richiede account), Paesi Bassi, Belgio (KBO richiede account), Danimarca, Svezia, Irlanda, Spagna, Portogallo, Italia (report startup innovative dietro sessione), Polonia (KRS senza data di nascita e senza ricerca per data), Estonia (open data in file da decine di MB, da fare).",
+  "quota_per_paese": {
+    "NO": {
+      "societa": 50,
+      "ricerche_sito": 4
+    },
+    "UK": {
+      "societa": 70,
+      "ricerche_sito": 8
+    },
+    "FR": {
+      "societa": 60,
+      "ricerche_sito": 6
+    },
+    "LV": {
+      "societa": 40,
+      "ricerche_sito": 4
+    },
+    "FI": {
+      "societa": 40,
+      "ricerche_sito": 0
+    }
+  },
+  "_nota_quote": "24 nov 2026: senza quote il Regno Unito si prendeva tutto il budget e Francia, Lettonia e Finlandia non arrivavano mai. Ogni paese ha la sua quota di società lette e di ricerche del sito per giro."
 }

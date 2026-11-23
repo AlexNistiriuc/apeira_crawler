@@ -49,10 +49,14 @@ export async function run({ log = console.log, dry = process.env.DRY === '1' } =
   const key = r => `registro ${r.paese} ${r.numero}`;
   const out = [], seenRows = [];
   let budget = CFG.max_societa_per_giro;
+  const quota = CFG.quota_per_paese || {};
+  const usate = {}, cercate = {};
+  const quotaOk = paese => (usate[paese] || 0) < (quota[paese]?.societa ?? Infinity);
 
   async function consider(r, people, codice, { senzaEta = false } = {}) {
     if (seenReg.has(key(r))) return;
-    st.societa_lette++; budget--;
+    if (!quotaOk(r.paese)) return;
+    st.societa_lette++; budget--; usate[r.paese] = (usate[r.paese] || 0) + 1;
     seenReg.add(key(r));
     const mark = esito => seenRows.push({ query: key(r), tipo: 'registro', settore: codice, luogo: r.paese, livello: 'registro', usata_il: now().slice(0, 10), risultati: 1, hub_nuovi: esito === 'in coda' ? 1 : 0, hub_utili: 0 });
     const persone = senzaEta ? [] : await people(r.numero);
@@ -60,8 +64,8 @@ export async function run({ log = console.log, dry = process.env.DRY === '1' } =
     if (!senzaEta) st.giovani++;
     let dom = siteDomain(r.sito);
     // registri senza età (Finlandia): niente ricerca del sito, si prende solo quello scritto nel registro
-    if (!dom && !senzaEta && searchEnabled() && st.ricerche_sito < CFG.ricerche_sito_per_giro) {
-      st.ricerche_sito++;
+    if (!dom && !senzaEta && searchEnabled() && st.ricerche_sito < CFG.ricerche_sito_per_giro && (cercate[r.paese] || 0) < (quota[r.paese]?.ricerche_sito ?? Infinity)) {
+      st.ricerche_sito++; cercate[r.paese] = (cercate[r.paese] || 0) + 1;
       const paese = { UK: 'UK', NO: 'Norway', FR: 'France', LV: 'Latvia', FI: 'Finland' }[r.paese] || '';
       dom = siteFromResults(r.nome, await webSearch(`"${r.nome.replace(/\b(ltd|limited|as|sas|sasu|sarl)\b\.?/gi, '').trim()}" ${paese}`, { count: 5 }));
       if (dom) st.siti_da_ricerca++;
@@ -85,19 +89,19 @@ export async function run({ log = console.log, dry = process.env.DRY === '1' } =
   }
 
   // Norvegia: API aperta
-  for (const nace of CFG.norvegia_nace) for (let p = 0; p < CFG.pagine_per_codice && budget > 0; p++) {
+  for (const nace of CFG.norvegia_nace) for (let p = 0; p < CFG.pagine_per_codice && budget > 0 && quotaOk('NO'); p++) {
     const { items, pagine } = await norwaySearch(nace, CFG.costituite_dal, p);
     for (const r of items) { if (budget <= 0) break; await consider(r, norwayPeople, `NACE ${nace}`); await sleep(150); }
     if (p + 1 >= pagine) break;
   }
   // Regno Unito: solo con la chiave di Companies House
-  if (process.env.COMPANIES_HOUSE_KEY) for (const sic of CFG.uk_sic) for (let p = 0; p < CFG.pagine_per_codice && budget > 0; p++) {
+  if (process.env.COMPANIES_HOUSE_KEY) for (const sic of CFG.uk_sic) for (let p = 0; p < CFG.pagine_per_codice && budget > 0 && quotaOk('UK'); p++) {
     const { items, pagine } = await ukSearch(sic, CFG.costituite_dal, p * 100);
     for (const r of items) { if (budget <= 0) break; await consider(r, ukPeople, `SIC ${sic}`); await sleep(300); }
     if (p + 1 >= pagine) break;
   } else st.uk = 'saltato: manca COMPANIES_HOUSE_KEY';
   // Francia: creazioni nel BODACC per parola dell'attività, età dei dirigenti dal registro (anno e mese)
-  for (const kw of CFG.francia_parole || []) for (let p = 0; p < CFG.pagine_per_codice && budget > 0; p++) {
+  for (const kw of CFG.francia_parole || []) for (let p = 0; p < CFG.pagine_per_codice && budget > 0 && quotaOk('FR'); p++) {
     const { items, pagine } = await franceSearch(kw, CFG.costituite_dal, p * 100);
     for (const r of items) {
       if (budget <= 0) break;
@@ -108,7 +112,7 @@ export async function run({ log = console.log, dry = process.env.DRY === '1' } =
   }
 
   // Finlandia: registro senza età; entrano solo le società con il sito scritto nel registro
-  for (const code of CFG.finlandia_codici || []) for (let p = 1; p <= CFG.pagine_per_codice && budget > 0; p++) {
+  for (const code of CFG.finlandia_codici || []) for (let p = 1; p <= CFG.pagine_per_codice && budget > 0 && quotaOk('FI'); p++) {
     const { items, pagine } = await finlandSearch(code, CFG.costituite_dal, p);
     for (const r of items) { if (budget <= 0) break; if (!r.sito) continue; await consider(r, null, `FI ${code}`, { senzaEta: true }); }
     if (p >= pagine) break;
@@ -124,6 +128,7 @@ export async function run({ log = console.log, dry = process.env.DRY === '1' } =
 
   if (!dry && out.length) await upsert(TABS.cand, 'dominio', out);
   if (!dry && seenRows.length) await upsert('db_scoperta', 'query', seenRows);
+  st.per_paese = { societa: usate, ricerche_sito: cercate };
   st.registri = { ...registryStats };
   Object.assign(st, searchLog());
   if (!dry) await logRun('scoperta da registro', startedAt, st);
