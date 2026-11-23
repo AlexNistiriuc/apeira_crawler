@@ -27,8 +27,31 @@ dopo l'ultima valutazione. Ogni riga ha tutte le colonne di `db_candidati`. Le p
 | `fatti_il` | data in cui il crawler founder ha raccolto questi fatti |
 | `round_notizie` | riassunto dei round e grant trovati nelle notizie (es. "EUR 3.5M (aventure.vc) · pre-seed"); lo mostra la vista |
 
+### Criterio per il fit (severo, dal 23 novembre 2026)
+
+Viene dal report della notte degli agenti di Tommaso. Le 46 startup Alto che il foglio aveva prima,
+ricontrollate con questa regola, sono scese a 2. L'età dei founder è il filtro che decide.
+
+| fit | regola |
+| --- | --- |
+| `Alto` | tutte e cinque le condizioni provate da una fonte, non dedotte. 1) fondazione 2025 o 2026 verificata (registro imprese o anno dichiarato sul sito; l'indizio del dominio non basta). 2) età di ogni founder verificata (registro imprese con data di nascita o fonte esplicita con nome e cognome) e sotto 35. 3) settore deep tech provato (sito, grant o descrizione nel registro). 4) angolo europeo. 5) nessun criterio violato (round oltre 500k, VC, team oltre 5, grant oltre 1M) |
+| `Medio` | nessun criterio violato, ma fondazione, età o settore non ancora verificati |
+| `Basso` | almeno un criterio violato, oppure fuori target. Un esito `Esclusa` ha sempre fit `Basso` |
+
+Le società trovate solo nel registro (per esempio Companies House per codice SIC), senza sito,
+restano `Medio` con motivo "CANDIDATO ALTO DA REGISTRO": il codice di attività lo sceglie il
+founder e non prova il prodotto.
+
+Il criterio sta in `src/classifiers/strict.js` e vale per tutti:
+- l'euristico lo applica da solo (versione `1.2 (criterio severo)`);
+- il runner (`src/classifiers/run.js`) lo applica a ogni classificatore prima di scrivere: un
+  Alto senza tutte le prove diventa Medio con "per Alto manca: ..." nel motivo e in `da_verificare`;
+- chi scrive a mano (Claude dal browser, una persona) deve seguire la stessa tabella;
+- `npm run realign` (o il workflow "classificatore euristico" con `riallinea = 1`) riallinea le
+  valutazioni già nel foglio, senza cancellare righe.
+
 ### Regole per i valutatori (Sage e Claude)
-- Si valuta solo dopo il crawler founder (`fatti_il` presente). Senza fatti niente fit Alto.
+- Si valuta solo dopo il crawler founder (`fatti_il` presente). Senza fatti niente fit Alto, e anche con i fatti vale il criterio severo qui sopra.
 - Si leggono sempre il testo delle pagine (`evidenze.estratto_home`, `estratto_team`) e le notizie salvate (`notizie_funding`), non solo i campi riassunti.
 - "Backed by", loghi di investitori o una pagina su un database di funding con il nome della startup sono segnali di round: da verificare e fit giù; se l'importo supera la soglia, esclusa.
 - Se manca un dato, lo si chiede ai crawler, non si cerca da soli sul web: workflow "crawler founder" con `domini` = elenco delle startup (rilegge tutto il sito e rifà registri, età e notizie), poi l'euristico ripassa.
@@ -64,6 +87,7 @@ Una riga in `db_valutazioni`, chiave `id = dominio|classificatore`. Obbligatori:
 | `motivo` | perché, in una frase |
 | `fondazione`, `grant`, `investimenti`, `accesso_lab`, `team`, `eta_founder` | evidenza per ciascun criterio, con la fonte |
 | `under30` | `sì` solo se l'età di tutti i founder è verificata (dichiarata pubblicamente o da registro imprese) e sotto 30 |
+| `fit` | vedi il criterio severo: `Alto` solo con fondazione, età di ogni founder, settore e angolo europeo provati |
 | `domanda_reale` | clienti, pilot, ricavi trovati |
 | `da_verificare` | cosa manca per qualificarla |
 | `fonti` | URL usati |
@@ -72,7 +96,8 @@ Una riga in `db_valutazioni`, chiave `id = dominio|classificatore`. Obbligatori:
 
 Le regole sono in `config/criteria.json` e nella skill. In breve: si esclude solo quando
 l'evidenza mostra una soglia superata; se manca un dato si mette `Needs verification`, mai
-`Qualificata` per supposizione; "Not disclosed" non vale zero.
+`Qualificata` per supposizione; "Not disclosed" non vale zero. Lo stesso vale per il fit: mai
+`Alto` per supposizione.
 
 Il foglio rifiuta righe con esito, fit, voto o id non validi, quindi un classificatore che
 sbaglia formato non sporca i dati.

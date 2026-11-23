@@ -101,7 +101,9 @@ IndexedDB. La v2 è Node, gira su GitHub Actions e tiene tutto nel foglio. Le eu
 stesse (portate 1:1 in `src/signals/patterns.js` e `scan.js`), con queste differenze:
 
 - età minima allineata ai criteri rigidi: fondazione dal 2025 (`config/criteria.json`);
-- il Fit non lo decide più il crawler ma il classificatore;
+- il Fit non lo decide più il crawler ma il classificatore, con il criterio severo dal 23 novembre 2026
+  (Alto solo con fondazione, età di ogni founder, settore e angolo europeo provati; vedi
+  `contracts/CLASSIFICATORI.md` e `src/classifiers/strict.js`);
 - nuovo segnale di domanda reale (clienti, pilot, contratti) ed estratti di testo per i modelli;
 - risolto il bug del regex `VCN` con caratteri di controllo al posto di `\b`;
 - non portati: il seed da Y Combinator (sono già finanziate) e il miner di startbase.de (resa bassa).

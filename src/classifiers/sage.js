@@ -9,6 +9,7 @@
 //    di buono (fit alto, voto >= 60, o qualificata) si rifà subito in modalità completa.
 // Le escluse dall'euristico non arrivano mai a Sage (zero crediti).
 // I consumi di ogni giro finiscono in db_log (statistiche.consumo).
+import { strictAlto } from './strict.js';
 import { getPage } from '../lib/http.js';
 import { links, host, reg } from '../lib/url.js';
 import { extract } from '../crawlers/startups/row.js';
@@ -33,9 +34,9 @@ const OUTCOME_OPTIONS = [
 ];
 
 const FIT_OPTIONS = [
-  { option: 'high', description: 'Strong European deep-tech fit, technical founders, real demand, very early stage, and a public work contact.' },
-  { option: 'medium', description: 'Plausible but incomplete fit; demand is weak or one preferred element is missing.' },
-  { option: 'low', description: 'Off-target, weakly deep-tech, non-European, too mature, or lacking convincing signals.' },
+  { option: 'high', description: 'Only if all five are proven by a source, not inferred: founded in 2025 or 2026 (company registry or year stated on the site); age of EVERY founder verified (registry or explicit public source) and under 35; deep-tech sector proven by the site, a grant or the registry description; European angle; no hard criterion violated.' },
+  { option: 'medium', description: 'No hard criterion violated, but founding year, the age of every founder or the deep-tech sector is not yet verified by a source.' },
+  { option: 'low', description: 'At least one hard criterion violated, or off-target: weakly deep-tech, non-European, too mature.' },
 ];
 
 const FIT_TO_SHEET = { high: 'Alto', medium: 'Medio', low: 'Basso' };
@@ -414,6 +415,7 @@ export default {
     const esito = safeOutcome(sage.esito, baseline, gate);
     let fit = FIT_TO_SHEET[sage.fit.chosen] || baseline.fit;
     if (fit === 'Alto' && !c.fatti_il) fit = 'Medio';   // senza i fatti del crawler founder (round, età, registro) niente Alto
+    if (fit === 'Alto' && !strictAlto(c).ok) fit = 'Medio'; // criterio severo (strict.js)
     const voto = safeScore(sage.voto.expectation, esito);
     const downgraded = sage.esito.chosen === 'qualified' && esito !== 'Qualificata';
     const sageExcluded = esito === 'Esclusa' && baseline.esito !== 'Esclusa';

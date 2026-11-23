@@ -5,13 +5,14 @@ import { CRITERIA as C } from '../lib/config.js';
 import { teamEstimate, money, founderAgeLabel, labAccess } from '../signals/derive.js';
 import { VCH } from '../signals/patterns.js';
 import { parseJson, newsFunding, founderCount, companyName, confirmedOver } from '../signals/facts.js';
+import { strictAlto, DEEP_MIN } from './strict.js';
 
 const usd = n => (n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : Math.round(n / 1e3) + 'k') + ' USD';
 const NOT_VC = /(incubat|accelerat|universit|school|college|institut|lab\b|hub\b|program|cohort)/i;
 
 export default {
   name: 'euristico',
-  version: '1.1',
+  version: '1.2 (criterio severo)',
 
   /** @param {object} c riga di db_candidati con c.ev = evidenze già parse */
   async classify(c) {
@@ -102,14 +103,13 @@ export default {
     const dem = (ev.dem || []).length;
     if (!dem) ver.push('domanda reale (clienti, pilot)');
 
-    const esito = ex.length ? 'Esclusa' : ver.length ? 'Needs verification' : 'Qualificata';
+    let esito = ex.length ? 'Esclusa' : ver.length ? 'Needs verification' : 'Qualificata';
 
-    // Fit come nella v1: target pulito + punteggio deep + un contatto
+    // Fit: target pulito + punteggio deep; poi il criterio severo (strict.js) decide se l'Alto è provato
     const score = (ev.deep || 0) - (ev.neg || 0);
-    const contact = !!(c.email || c.linkedin_persone);
     const ageOk = ry ? ry >= C.min_founded_year : fy.some(y => y >= C.min_founded_year) || (c.dominio_registrato || '') >= C.domain_young_from || c.primo_archivio === 'mai' || +(c.primo_archivio || '0').slice(0, 4) >= C.min_founded_year - 1;
     const target = ev.eu && !(ev.fund?.l >= 1) && ageOk;
-    let fit = target && score >= 6 && contact ? 'Alto' : target || (!ageOk && score >= 7) ? 'Medio' : 'Basso';
+    let fit = target && score >= DEEP_MIN ? 'Alto' : target || (!ageOk && score >= 7) ? 'Medio' : 'Basso';
     const down = f => (f === 'Alto' ? 'Medio' : 'Basso');
     if (tm.n > C.max_team_size) { if (tm.k === 'e') fit = 'Basso'; else if (tm.k === 'li' || tm.n > 8) fit = down(fit); }
     // posizioni aperte sul sito (crawler, sito intero): con molte assunzioni il team è probabilmente oltre 5
@@ -123,6 +123,12 @@ export default {
     }
     if (phaseDown) fit = down(fit);
     if (eta.startsWith('non verificata') && /35 o più/.test(c.eta_stimata || '')) fit = down(fit); // stima: ordina, non esclude
+    // criterio severo: un criterio violato = Basso; Alto solo con fondazione, età di tutti i founder, settore e angolo europeo provati
+    if (ex.length) fit = 'Basso';
+    if (fit === 'Alto') {
+      const s = strictAlto({ ...c, ev });
+      if (!s.ok) { fit = 'Medio'; note.push('per Alto manca: ' + s.manca.join(', ')); for (const x of s.manca) if (!ver.includes(x)) ver.push(x); if (esito === 'Qualificata') esito = 'Needs verification'; }
+    }
 
     const voto = Math.max(0, Math.min(100, (esito === 'Qualificata' ? 60 : esito === 'Needs verification' ? 35 : 0) + (fit === 'Alto' ? 25 : fit === 'Medio' ? 12 : 0) + Math.min(Math.max(score, 0), 15) - 8 * phaseDown - (esito === 'Esclusa' ? 100 : 0)));
 

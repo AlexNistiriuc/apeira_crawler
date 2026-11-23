@@ -125,18 +125,24 @@ or when the Sage classifier is unavailable.
    await api('upsert', { tab: 'db_valutazioni', key: 'id', rows: [ {
      id: 'qubo.ai|claude', dominio: 'qubo.ai', classificatore: 'claude', versione: 'skill-v9',
      valutato_il: '2026-11-18 08:40:00',
-     esito: 'Needs verification', fit: 'Alto', voto: 72,
+     esito: 'Needs verification', fit: 'Medio', voto: 62,
      motivo: 'quantum, fondata 2025, pilot con un operatore telecom; età dei founder non pubblica',
      fondazione: '2025 (dichiarato su qubo.ai/about)', grant: 'Not disclosed', investimenti: 'Not disclosed',
      accesso_lab: 'shared or third-party: TU Delft cleanroom', team: '3 (dichiarato sul sito)',
      eta_founder: 'non verificata', under30: 'no', domanda_reale: 'pilot con operatore telecom europeo',
-     da_verificare: 'età founder, investimenti', fonti: 'https://qubo.ai/about, https://...' } ] })
+     da_verificare: 'età verificata di ogni founder, investimenti', fonti: 'https://qubo.ai/about, https://...' } ] })
    ```
    Field meanings and allowed values are in `contracts/CLASSIFICATORI.md`. In short:
    - `esito`: `Qualificata` / `Needs verification` / `Esclusa`.
-   - `fit`: `Alto` / `Medio` / `Basso`.
-   - `voto` 0-100. Calibrate as follows: 85+ qualified with strong demand and fit; 60-84 promising,
-     still to verify; 30-59 weak fit; under 30 excluded or off-target.
+   - `fit`: `Alto` / `Medio` / `Basso`, with the strict rule (since 23 Nov 2026, `src/classifiers/strict.js`).
+     `Alto` only when all five are proven by a source, not inferred: founded 2025 or 2026 (registry or year
+     stated on the site, a domain date is not enough); age of EVERY founder verified (registry birth date or an
+     explicit source naming the person) and under 35; deep-tech sector proven (site, grant or registry
+     description); European angle; no hard criterion violated. `Medio` when nothing is violated but founding,
+     age or sector is unverified. `Basso` when a criterion is violated or off-target; `Esclusa` is always `Basso`.
+     A registry-only company without a site stays `Medio` with motivo "CANDIDATO ALTO DA REGISTRO".
+   - `voto` 0-100. Calibrate as follows: 85+ qualified with strong demand and a strict Alto; 70-84 strict Alto still to verify; 50-69 Medio;
+     30-49 weak fit; under 30 excluded or off-target.
    - `under30`: `sì` only when every founder's age under 30 is publicly stated.
    - Never write `nota_alex`.
    The sheet rejects invalid rows. If it answers `ok:false`, fix the row and retry.

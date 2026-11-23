@@ -13,6 +13,7 @@ import { appendFileSync } from 'node:fs';
 import { queue, read, logRun, views, writer, TABS } from '../lib/sheet.js';
 import { now } from '../lib/config.js';
 import { validateEvaluation } from './contract.js';
+import { applyStrict } from './strict.js';
 
 export async function classifyQueue(clf, limit = 500, log = console.log, { deadline = Infinity, refreshView = false } = {}) {
   const startedAt = now();
@@ -38,7 +39,9 @@ export async function classifyQueue(clf, limit = 500, log = console.log, { deadl
         if (err.fatal) { fatal = err.message; }
         continue;
       }
-      const full = { id: `${c.dominio}|${clf.name}`, dominio: c.dominio, classificatore: clf.name, versione: clf.version, valutato_il: now(), ...e };
+      // criterio severo per tutti i classificatori: Alto solo con le cinque prove, Esclusa sempre Basso
+      const { _cambiata, ...full } = applyStrict({ id: `${c.dominio}|${clf.name}`, dominio: c.dominio, classificatore: clf.name, versione: clf.version, valutato_il: now(), ...e }, c);
+      if (_cambiata) st.corrette_dal_criterio = (st.corrette_dal_criterio || 0) + 1;
       const errs = validateEvaluation(full);
       if (errs.length) { st.non_valide++; log(`valutazione non valida per ${c.dominio}: ${errs.join('; ')}`); continue; }
       st.scritte++;
