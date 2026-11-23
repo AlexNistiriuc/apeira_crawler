@@ -99,7 +99,8 @@ export async function franceSearch(keyword, from, offset = 0, limit = 100) {
     const e = et.etablissement || (Array.isArray(et) ? et[0]?.etablissement : null) || {};
     const siren = String((Array.isArray(r.registre) ? r.registre[0] : r.registre) || '').replace(/\D/g, '');
     return { paese: 'FR', numero: siren, nome: String(r.commercant || '').trim(), costituita: r.dateparution || '', attivita: String(e.activite || '').slice(0, 300), sito: '', url: siren ? `https://annuaire-entreprises.data.gouv.fr/entreprise/${siren}` : '' };
-  }).filter(x => x.numero.length === 9 && x.nome);
+  // fuori gli imprenditori individuali ("COGNOME, Nome"): liberi professionisti, non società
+  }).filter(x => x.numero.length === 9 && x.nome && !/,/.test(x.nome));
   return { items, pagine: Math.ceil((j?.total_count || 0) / limit) };
 }
 

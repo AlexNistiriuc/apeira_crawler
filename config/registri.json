@@ -50,6 +50,6 @@
     "fusion nucléaire",
     "intelligence artificielle embarquée"
   ],
-  "francia_escludi": "formation|conseil|consulting|immobili|restaura|coiffure|transport de|nettoyage|bâtiment|batiment|commerce de détail|vente en ligne|holding|location",
+  "francia_escludi": "formation|enseignement|coaching|conseil|consulting|immobili|restaura|coiffure|transport de|nettoyage|bâtiment|batiment|commerce de détail|vente en ligne|holding|location",
   "_nota_francia": "Francia (23 nov 2026): BODACC (creazioni, senza chiave) per parola dell'attività, poi dirigenti con anno e mese di nascita da recherche-entreprises. Repubblica Ceca: ARES non filtra per data di costituzione e rifiuta oltre 1.000 risultati, quindi solo ricerca per nome nel crawler founder."
 }

@@ -83,3 +83,11 @@ test('Francia: creazioni dal BODACC e dirigenti con anno e mese di nascita', asy
   const p = await francePeople('912345678');
   assert.equal(p[0].nome, 'Lea Martin'); assert.ok(p[0].max <= 27);
 });
+
+test('Francia: gli imprenditori individuali (COGNOME, Nome) non sono società', async () => {
+  const { franceSearch } = await import('../src/lib/registry.js');
+  setRegistryFetch(async () => Response.json({ total_count: 2, results: [
+    { dateparution: '2025-09-01', commercant: 'GAUBE, Alexia Aurelie', registre: ['912345671'] },
+    { dateparution: '2025-09-01', commercant: 'POPN\'DRIVE', registre: ['912345672'] }] }));
+  assert.deepEqual((await franceSearch('robotique', '2025-01-01')).items.map(x => x.nome), ["POPN'DRIVE"]);
+});
