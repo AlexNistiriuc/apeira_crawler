@@ -21,7 +21,8 @@ export function splitCsv(line) {
 
 /** Legge un CSV riga per riga (in streaming) e chiama onRow con un oggetto per riga. */
 export async function eachCsvRow(url, onRow, fetchImpl = registryFetch) {
-  const r = await fetchImpl(url, { signal: AbortSignal.timeout(240000) });
+  let r;
+  try { r = await fetchImpl(url, { signal: AbortSignal.timeout(900000) }); } catch { registryStats.errori++; return 0; }
   if (!r.ok) { registryStats.errori++; return 0; }
   const reader = r.body.getReader(), dec = new TextDecoder();
   let buf = '', head = null, n = 0, pending = '';
@@ -35,7 +36,8 @@ export async function eachCsvRow(url, onRow, fetchImpl = registryFetch) {
     n++; onRow(o);
   };
   for (;;) {
-    const { value, done } = await reader.read();
+    let chunk; try { chunk = await reader.read(); } catch { registryStats.errori++; break; }   // file troncato: si usa quello che c'è
+    const { value, done } = chunk;
     if (done) break;
     buf += dec.decode(value, { stream: true });
     let i; while ((i = buf.indexOf('\n')) >= 0) { take(buf.slice(0, i).replace(/\r$/, '')); buf = buf.slice(i + 1); }
