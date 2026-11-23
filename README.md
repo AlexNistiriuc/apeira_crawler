@@ -18,7 +18,7 @@ scrivono, ognuno solo nelle sue colonne:
 | pezzo | cosa fa | quando gira |
 | --- | --- | --- |
 | crawler hub | aggiunge pool: semi, reti di incubatori (EBN, UKSPA), snowball dai siti delle startup; poi scoperta con ricerche web e scoperta da registro | GitHub Actions, a catena |
-| scoperta da registro | società costituite dal 2025 con attività deep tech e tutti gli amministratori sotto 35 anni (Norvegia per codice NACE, Regno Unito per codice SIC, Francia per parole dell'attività nel BODACC): entrano in coda con età verificate | nel giro del crawler hub |
+| scoperta da registro | società costituite dal 2025 con attività deep tech e tutti gli amministratori sotto 35 anni (Norvegia per codice NACE, Regno Unito per codice SIC, Francia per parole dell'attività nel BODACC, Lettonia per nome dall'open data una volta al giorno): entrano in coda con età verificate. Finlandia (PRH) per codice di attività, senza età: entrano solo con il sito scritto nel registro. Gli altri paesi europei non hanno un registro aperto con data di nascita o ricerca per data: vedi `_nota_altri_paesi` in `config/registri.json` | nel giro del crawler hub |
 | crawler startup | legge i pool, trova i siti delle startup, controlla età, funding, settore, team, contatti, salva le evidenze | GitHub Actions, a catena senza sosta (giri da ~45 minuti) |
 | classificatore euristico | i criteri rigidi della v1, come base di confronto | subito dopo ogni giro del crawler startup |
 | classificatore Sage | decide esito, fit e voto dopo l'euristico; completo (ricerca web + reasoning) per Fit Alto/Medio, leggero per Fit Basso | GitHub Actions, dopo ogni giro del crawler e a catena finché la coda non è vuota |
