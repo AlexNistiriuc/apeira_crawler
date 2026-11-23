@@ -70,11 +70,37 @@ export async function franceLookup(name) {
   const hit = pickOne(j?.results, r => [r.nom_complet, r.nom_raison_sociale, r.sigle], normName(name));
   if (!hit) return null;
   registryStats.trovate++;
-  const persone = (hit.dirigeants || []).filter(d => d.type_dirigeant !== 'personne morale' && (d.date_de_naissance || d.annee_de_naissance)).map(d => {
-    const [y, m] = String(d.date_de_naissance || d.annee_de_naissance).split('-').map(Number);
-    return { nome: title(`${d.prenoms || ''} ${d.nom || ''}`), ruolo: d.qualite || 'dirigente', ...ageFrom(y, m) };
-  });
+  const persone = frPeople(hit);
   return { paese: 'FR', numero: hit.siren, nome: hit.nom_complet, costituita: hit.date_creation || '', aumenti_capitale: [], persone, url: `https://annuaire-entreprises.data.gouv.fr/entreprise/${hit.siren}` };
+}
+
+const frPeople = hit => (hit?.dirigeants || []).filter(d => d.type_dirigeant !== 'personne morale' && (d.date_de_naissance || d.annee_de_naissance)).map(d => {
+  const [y, m] = String(d.date_de_naissance || d.annee_de_naissance).split('-').map(Number);
+  return { nome: title(`${d.prenoms || ''} ${d.nom || ''}`), ruolo: d.qualite || 'dirigente', ...ageFrom(y, m) };
+});
+
+/** Dirigenti di un'impresa francese per SIREN (con anno e mese di nascita). */
+export async function francePeople(siren) {
+  registryStats.fr++;
+  const j = await getJson(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(siren)}&per_page=1`);
+  const hit = (j?.results || []).find(r => String(r.siren) === String(siren));
+  return hit ? frPeople(hit) : [];
+}
+
+const BODACC = () => process.env.BODACC_BASE || 'https://bodacc-datadila.opendatasoft.com/api/explore/v2.1/catalog/datasets/annonces-commerciales/records';
+
+/** Francia: creazioni pubblicate nel BODACC dal giorno indicato, con una parola nell'attività (per la scoperta da registro). */
+export async function franceSearch(keyword, from, offset = 0, limit = 100) {
+  registryStats.fr++;
+  const where = `familleavis="creation" and dateparution>="${from}" and search(${JSON.stringify(keyword)})`;
+  const j = await getJson(`${BODACC()}?where=${encodeURIComponent(where)}&limit=${limit}&offset=${offset}&order_by=dateparution%20desc`);
+  const items = (j?.results || []).map(r => {
+    let et = {}; try { et = JSON.parse(r.listeetablissements || '{}'); } catch { /* testo */ }
+    const e = et.etablissement || (Array.isArray(et) ? et[0]?.etablissement : null) || {};
+    const siren = String((Array.isArray(r.registre) ? r.registre[0] : r.registre) || '').replace(/\D/g, '');
+    return { paese: 'FR', numero: siren, nome: String(r.commercant || '').trim(), costituita: r.dateparution || '', attivita: String(e.activite || '').slice(0, 300), sito: '', url: siren ? `https://annuaire-entreprises.data.gouv.fr/entreprise/${siren}` : '' };
+  }).filter(x => x.numero.length === 9 && x.nome);
+  return { items, pagine: Math.ceil((j?.total_count || 0) / limit) };
 }
 
 /** Regno Unito. Senza COMPANIES_HOUSE_KEY restituisce null. */

@@ -65,3 +65,21 @@ test('scoperta da registro: solo società giovani con sito, segnate per non rile
   const again = await run({ log: () => {} });
   assert.equal(again.societa_lette, 0, 'al giro dopo non si rileggono');
 });
+
+test('Francia: creazioni dal BODACC e dirigenti con anno e mese di nascita', async () => {
+  const { franceSearch, francePeople } = await import('../src/lib/registry.js');
+  setRegistryFetch(async url => {
+    url = String(url);
+    if (url.includes('bodacc')) {
+      assert.match(decodeURIComponent(url), /familleavis="creation" and dateparution>="2025-01-01" and search\("quantique"\)/);
+      return Response.json({ total_count: 1, results: [{ dateparution: '2025-09-01', commercant: 'QUBITIX', registre: ['912345678', '912 345 678'], listeetablissements: JSON.stringify({ etablissement: { activite: 'recherche et développement en informatique quantique' } }) }] });
+    }
+    if (url.includes('recherche-entreprises')) return Response.json({ results: [{ siren: '912345678', dirigeants: [{ nom: 'MARTIN', prenoms: 'Lea', date_de_naissance: `${year - 26}-04`, qualite: 'Président', type_dirigeant: 'personne physique' }] }] });
+    return new Response('', { status: 404 });
+  });
+  const { items } = await franceSearch('quantique', '2025-01-01');
+  assert.deepEqual(items.map(x => [x.numero, x.nome, x.costituita]), [['912345678', 'QUBITIX', '2025-09-01']]);
+  assert.match(items[0].attivita, /quantique/);
+  const p = await francePeople('912345678');
+  assert.equal(p[0].nome, 'Lea Martin'); assert.ok(p[0].max <= 27);
+});

@@ -1,5 +1,5 @@
 // Scoperta da registro: parte dalle società, non dagli hub. Registri con data di nascita degli amministratori
-// (Norvegia sempre, Regno Unito con COMPANIES_HOUSE_KEY), per codice di attività e costituite di recente.
+// (Norvegia e Francia sempre, Regno Unito con COMPANIES_HOUSE_KEY), per codice di attività e costituite di recente.
 // Una società entra in db_candidati (stato da_ricontrollare, così il crawler startup ne legge il sito) solo se:
 //  - tutti gli amministratori con data di nascita hanno meno di 35 anni (almeno uno);
 //  - ha un sito: dal registro o, se manca, da una ricerca (al massimo ricerche_sito_per_giro a giro).
@@ -10,7 +10,7 @@ import { read, upsert, logRun, TABS } from '../../lib/sheet.js';
 import { now } from '../../lib/config.js';
 import { CRITERIA as C } from '../../lib/config.js';
 import { reg, host, bad } from '../../lib/url.js';
-import { norwaySearch, norwayPeople, ukSearch, ukPeople, normName, registryStats } from '../../lib/registry.js';
+import { norwaySearch, norwayPeople, ukSearch, ukPeople, franceSearch, francePeople, normName, registryStats } from '../../lib/registry.js';
 import { webSearch, searchEnabled, searchLog } from '../../lib/search.js';
 import { sleep } from '../../lib/http.js';
 
@@ -60,7 +60,8 @@ export async function run({ log = console.log, dry = process.env.DRY === '1' } =
     let dom = siteDomain(r.sito);
     if (!dom && searchEnabled() && st.ricerche_sito < CFG.ricerche_sito_per_giro) {
       st.ricerche_sito++;
-      dom = siteFromResults(r.nome, await webSearch(`"${r.nome.replace(/\b(ltd|limited|as)\b\.?/gi, '').trim()}" ${r.paese === 'UK' ? 'UK' : 'Norway'}`, { count: 5 }));
+      const paese = { UK: 'UK', NO: 'Norway', FR: 'France' }[r.paese] || '';
+      dom = siteFromResults(r.nome, await webSearch(`"${r.nome.replace(/\b(ltd|limited|as|sas|sasu|sarl)\b\.?/gi, '').trim()}" ${paese}`, { count: 5 }));
       if (dom) st.siti_da_ricerca++;
     }
     if (!dom) return mark('senza sito');
@@ -93,6 +94,16 @@ export async function run({ log = console.log, dry = process.env.DRY === '1' } =
     for (const r of items) { if (budget <= 0) break; await consider(r, ukPeople, `SIC ${sic}`); await sleep(300); }
     if (p + 1 >= pagine) break;
   } else st.uk = 'saltato: manca COMPANIES_HOUSE_KEY';
+  // Francia: creazioni nel BODACC per parola dell'attività, età dei dirigenti dal registro (anno e mese)
+  for (const kw of CFG.francia_parole || []) for (let p = 0; p < CFG.pagine_per_codice && budget > 0; p++) {
+    const { items, pagine } = await franceSearch(kw, CFG.costituite_dal, p * 100);
+    for (const r of items) {
+      if (budget <= 0) break;
+      if (CFG.francia_escludi && new RegExp(CFG.francia_escludi, 'i').test(`${r.nome} ${r.attivita}`)) continue;
+      await consider(r, francePeople, `FR "${kw}"`); await sleep(250);
+    }
+    if (p + 1 >= pagine) break;
+  }
 
   if (!dry && out.length) await upsert(TABS.cand, 'dominio', out);
   if (!dry && seenRows.length) await upsert('db_scoperta', 'query', seenRows);
