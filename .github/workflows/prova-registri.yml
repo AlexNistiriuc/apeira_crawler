@@ -10,3 +10,5 @@ jobs:
         with: { node-version: 20, cache: npm }
       - run: npm ci
       - run: node tools/prova-registri.js
+        env:
+          COMPANIES_HOUSE_KEY: ${{ secrets.COMPANIES_HOUSE_KEY }}
