@@ -64,6 +64,6 @@
     "21200",
     "32500"
   ],
-  "lettonia_parole_nome": "tech|lab|robot|bio|quant|space|aero|drone|photon|laser|semi|chip|energ|fusion|nano|materia|medtech|dynamics|science|research|engineering|systems|ai\\b|\\bai|innovat|sensor|optic|cyber|defen|satellit|rocket|batter|hydrogen",
+  "lettonia_parole_nome": "\\b(robot\\w*|robotic\\w*|quantum|space|aero\\w*|drone\\w*|photon\\w*|laser\\w*|semicond\\w*|chips?|fusion|nano\\w*|bio\\w*|medtech|dynamics|sensors?|optic\\w*|satellit\\w*|rocket\\w*|batter\\w*|hydrogen|materials?|deep ?tech|defen[cs]e|autonom\\w*|neuro\\w*|genom\\w*|cell|thera\\w*)\\b",
   "_nota_altri_paesi": "Finlandia (PRH): data e attività ma niente età, entrano solo con il sito nel registro. Lettonia: età dal codice personale, niente attività, filtro sul nome, una volta al giorno. Esclusi per ora perché servono registrazione, pagamento o non c'è un'API aperta: Germania, Austria, Svizzera (Zefix richiede account), Paesi Bassi, Belgio (KBO richiede account), Danimarca, Svezia, Irlanda, Spagna, Portogallo, Italia (report startup innovative dietro sessione), Polonia (KRS senza data di nascita e senza ricerca per data), Estonia (open data in file da decine di MB, da fare)."
 }
