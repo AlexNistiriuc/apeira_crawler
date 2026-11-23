@@ -38,7 +38,7 @@ export function candidateRow(c, s, x) {
     estratto_team: extract(x.texts?.team, 1500),
     // sito intero (solo per chi passa il prefiltro): estratti per tipo di pagina per i valutatori
     ...(x.sito ? {
-      sito: { pagine: x.sito.lette, grande: x.sito.grande, secondi: x.sito.secondi, posizioni_aperte: x.sito.posizioni, per_tipo: x.sito.per_tipo },
+      sito: { pagine: x.sito.lette, grande: x.sito.grande, secondi: x.sito.secondi, posizioni_aperte: x.sito.posizioni, per_tipo: x.sito.per_tipo, link_interni: x.sito.link_interni, ...(x.sito.da_sitemap ? { da_sitemap: x.sito.da_sitemap } : {}), ...(x.sito.motivo_zero ? { motivo_zero: x.sito.motivo_zero } : {}) },
       estratto_careers: extract(x.texts?.careers, 1500),
       estratto_blog: extract(x.texts?.blog, 2500),
       estratto_about: extract(x.texts?.about, 1500),
