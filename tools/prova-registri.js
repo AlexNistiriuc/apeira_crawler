@@ -1,8 +1,7 @@
-// Prova in sola lettura delle API dei registri (non scrive nel foglio). Stampa solo conteggi ed età, mai date di nascita.
-import { norwaySearch, norwayPeople, norwayLookup, czechLookup, registryStats } from '../src/lib/registry.js';
-const no = await norwaySearch('72.190', '2025-01-01', 0, 20);
-console.log('NO ricerca NACE 72.190 dal 2025:', no.items.length, 'società, pagine', no.pagine, '· con sito', no.items.filter(x => x.sito).length);
-for (const r of no.items.slice(0, 5)) { const p = await norwayPeople(r.numero); console.log(' ', r.nome, r.costituita, 'persone', p.length, 'età', p.map(x => x.max).join('/')); }
-for (const n of ['Nara', 'Tempe Defence', 'Flamme Aerospace']) { const r = await norwayLookup(n); console.log('NO nome', n, '->', r ? `${r.nome} ${r.costituita} persone ${r.persone.length} età ${r.persone.map(x => x.max).join('/')}` : 'non trovata'); }
-for (const n of ['Zenit Astronomy', 'Malnus', 'Celestia Energy']) { const r = await czechLookup(n); console.log('CZ nome', n, '->', r ? `${r.nome} ${r.costituita} persone ${r.persone.length} età ${r.persone.map(x => x.max).join('/')}` : 'non trovata'); }
-console.log(JSON.stringify(registryStats));
+// Prova in sola lettura delle API dei registri (non scrive nel foglio). Stampa solo conteggi.
+const B = 'https://data.brreg.no/enhetsregisteret/api/enheter';
+for (const q of ['naeringskode=72.190&size=1', 'naeringskode=72.19&size=1', 'naeringskode=72.190&fraRegistreringsdatoEnhetsregisteret=2025-01-01&size=1', 'naeringskode=72.190&fraStiftelsesdato=2025-01-01&size=1', 'naeringskode=72.190&fraRegistreringsdatoEnhetsregisteret=2025-01-01&tilRegistreringsdatoEnhetsregisteret=2026-12-31&size=1', 'navn=Nara&size=1']) {
+  const r = await fetch(`${B}?${q}`, { headers: { Accept: 'application/json' } });
+  const j = r.ok ? await r.json() : null;
+  console.log('NOPROVA', r.status, q, 'totale', j?.page?.totalElements, 'esempio', JSON.stringify(j?._embedded?.enheter?.[0]?.naeringskode1 || null), j?._embedded?.enheter?.[0]?.registreringsdatoEnhetsregisteret, j?._embedded?.enheter?.[0]?.stiftelsesdato);
+}
