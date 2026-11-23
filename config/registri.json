@@ -1,11 +1,33 @@
 {
   "_nota": "Scoperta da registro (23 nov 2026, dal report degli agenti di Tommaso): società costituite di recente con codici di attività deep tech, amministratori con data di nascita. Entrano in coda al crawler startup solo se hanno un sito e tutti gli amministratori hanno meno di 35 anni.",
   "costituite_dal": "2025-01-01",
-  "norvegia_nace": ["72.190", "72.110", "26.110", "26.300", "26.510", "26.600", "27.200", "28.990", "30.300", "21.200", "71.122"],
-  "uk_sic": ["30300", "25400", "28990", "26511", "26110", "26701", "27200", "72190", "72110", "21200"],
+  "norvegia_nace": [
+    "72.100",
+    "26.510",
+    "26.110",
+    "26.120",
+    "26.300",
+    "26.600",
+    "27.200",
+    "28.990",
+    "21.200"
+  ],
+  "uk_sic": [
+    "30300",
+    "25400",
+    "28990",
+    "26511",
+    "26110",
+    "26701",
+    "27200",
+    "72190",
+    "72110",
+    "21200"
+  ],
   "pagine_per_codice": 10,
   "max_societa_per_giro": 150,
   "ricerche_sito_per_giro": 15,
   "_nota_memoria": "Ogni società letta si segna in db_scoperta (tipo registro): non si rilegge e la ricerca del sito non si ripaga.",
-  "_nota_ricerche": "Una ricerca ScrapeGraph per trovare il sito di una società senza sito nel registro, solo se tutti gli amministratori hanno meno di 35 anni. È l'unico costo in crediti."
+  "_nota_ricerche": "Una ricerca ScrapeGraph per trovare il sito di una società senza sito nel registro, solo se tutti gli amministratori hanno meno di 35 anni. È l'unico costo in crediti.",
+  "_nota_nace": "Codici SN2025 (Norvegia, verificati il 23 nov 2026): 72.100 ricerca e sviluppo in scienze e ingegneria è quello che rende (Space Exploration Lab, Aligned Robotics, Rubedo). 71.129 e 62.100 troppo larghi."
 }
