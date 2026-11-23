@@ -15,7 +15,7 @@ import { getPage } from '../../lib/http.js';
 import { host, reg, bad, links, hubKey } from '../../lib/url.js';
 import { now, today } from '../../lib/config.js';
 import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed, searchLog, provider, sgCredits } from '../../lib/search.js';
-import { VCH, JUNKHUB } from '../../signals/patterns.js';
+import { VCH, JUNKHUB, HUB_OFFTOPIC, STARTUP_ECO } from '../../signals/patterns.js';
 import { hubType } from '../hubs/classify.js';
 
 const CFG = JSON.parse(readFileSync(new URL('../../../config/discovery.json', import.meta.url), 'utf8'));
@@ -41,7 +41,8 @@ export function candidates(used, stats) {
     if (get(stats.tipo, t).utili < 1) continue;                       // livello 2 solo per tipi che rendono
     for (const s of CFG.settori.filter(Boolean)) {
       for (const p of CFG.paesi) push(`${s} ${t} ${p}`, t, s, p, 2);
-      if (get(stats.coppia, `${t}|${s}`).utili < 1) continue;         // livello 3 solo per coppie che rendono
+      // livello 3 (settore + tipo + città + anno) spento dal 23 nov 2026: rendeva pochissimo per credito speso
+      if ((CFG.livello_massimo ?? 2) < 3 || get(stats.coppia, `${t}|${s}`).utili < 1) continue;
       for (const c of CFG.citta) push(`${s} ${t} ${c} ${anno}`, t, s, c, 3);
     }
   }
@@ -62,8 +63,16 @@ export function pickQueries(used, stats, n, rnd = Math.random) {
   return out;
 }
 
+/** Hub fuori tema (SEO, marketing, agenzie, software house...) o che non parla di startup: non si aggiunge. */
+export function offTopicHub(url, title, md = '') {
+  if (HUB_OFFTOPIC.test(`${title} ${url}`)) return 'fuori tema: ' + (`${title} ${url}`.match(HUB_OFFTOPIC) || [''])[0].toLowerCase();
+  if (md && (String(md).match(STARTUP_ECO) || []).length < 2) return 'non parla di startup';
+  return '';
+}
+
 /** Test: forte -> attivo, leggero -> da_verificare, altrimenti no. */
-export function looksLikePool(url, md) {
+export function looksLikePool(url, md, title = '') {
+  if (offTopicHub(url, title, md)) return { ok: false, stato: null, esterni: 0, parole: 0, fuori_tema: true };
   const own = reg(host(url));
   const ext = new Set();
   for (const [, l] of links(md)) { const h = host(l); if (h && reg(h) !== own && !bad(h)) ext.add(reg(h)); }
@@ -103,7 +112,8 @@ export async function run({ log = console.log, deadline = Date.now() + CFG.minut
     if (r.status !== 200 || !r.text) return 0;
     const title = (r.text.match(/^Title:\s*(.*)$/m) || [])[1] || name || host(url);
     let found = 0;
-    const t = looksLikePool(url, r.text);
+    const t = looksLikePool(url, r.text, title);
+    if (t.fuori_tema) st.fuori_tema = (st.fuori_tema || 0) + 1;
     if (t.ok) {
       have.add(id); found++;
       add.push({ hub_id: id, nome: String(title).slice(0, 80), url, origine, tipo: hubType(title + ' ' + (hint || ''), url), stato: t.stato, priorita: t.stato === 'attivo' ? '12' : '8', scoperto_il: today(), note: `test: ${t.esterni} siti esterni, ${t.parole} parole da pool` });
@@ -127,6 +137,7 @@ export async function run({ log = console.log, deadline = Date.now() + CFG.minut
   const stats = { tipo: {}, settore: {}, luogo: {}, coppia: {} };
   const updates = [];
   for (const s of scop) {
+    if (s.tipo === 'registro') continue;   // società lette dalla scoperta da registro, non domande
     const y = yieldOf[s.query] || { nuovi: 0, utili: 0 };
     for (const [k, v] of [['tipo', s.tipo], ['settore', s.settore], ['luogo', s.luogo], ['coppia', `${s.tipo}|${s.settore}`]]) { const o = stats[k][v] = stats[k][v] || { nuovi: 0, utili: 0 }; o.nuovi += y.nuovi; o.utili += y.utili; }
     if (String(y.utili) !== String(s.hub_utili) || String(y.nuovi) !== String(s.hub_nuovi)) updates.push({ query: s.query, hub_nuovi: y.nuovi, hub_utili: y.utili });

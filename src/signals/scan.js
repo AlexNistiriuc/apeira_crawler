@@ -14,7 +14,7 @@ export function emptySignals() {
     ts: { e: 0, li: [], r: 0 },
     evd: { g: [], i: [], lc: '', lx: '', fy: [] },
     dem: [],
-    corp: false, inv: false,
+    corp: false, inv: false, nostart: '',
   };
 }
 
@@ -177,6 +177,7 @@ export function scanPage(s, t, opt = {}) {
   s.fund.x = uniq([...s.fund.x, ...f.x], 4);
   if (opt.home && P.CORP.test(t)) s.corp = true;   // come nella v1: solo sulla home
   if (opt.home && P.INVT.test(t)) s.inv = true;
+  if (opt.home && !s.nostart) { const m = t.match(P.NOSTART); if (m) s.nostart = m[0].toLowerCase(); }
   fageScan(s.fa, t); teamScan(s.ts, t); evScan(s.evd, t); demandScan(s.dem, t);
   return s;
 }

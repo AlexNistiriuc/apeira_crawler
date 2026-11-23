@@ -14,8 +14,8 @@ test('stima età: dichiarata, nascita, laurea, dottorando; il cognome deve esser
   assert.equal(band(31), '30-34');
 });
 
-test('crawler founder: solo CEO e CTO, una ricerca per persona, una volta sola', async () => {
-  process.env.SEARCH_API_KEY = 'k'; process.env.SEARCH_GAP_MS = '0';
+test('crawler founder: solo CEO e CTO, una ricerca per persona (se riaccese), una volta sola', async () => {
+  process.env.SEARCH_API_KEY = 'k'; process.env.SEARCH_GAP_MS = '0'; process.env.RICERCHE_PERSONA = '1';
   const { setSheetBackend, upsert, read } = await import('../src/lib/sheet.js');
   const { setSearchFetch } = await import('../src/lib/search.js');
   const { run, ceoCto } = await import('../src/crawlers/founders/index.js');
@@ -37,6 +37,22 @@ test('crawler founder: solo CEO e CTO, una ricerca per persona, una volta sola',
   assert.ok(c.fatti_il, 'fatti raccolti');
   assert.equal(c.eta_verificate, '[]', 'anno di laurea non è età verificata');
   assert.equal((await run(10, () => {})).candidate, 0, 'già stimata');
+  delete process.env.RICERCHE_PERSONA;
+});
+
+test('crawler founder: di default nessuna ricerca per persona, solo quella su round e founder', async () => {
+  process.env.SEARCH_API_KEY = 'k'; process.env.SEARCH_GAP_MS = '0'; delete process.env.RICERCHE_PERSONA;
+  const { setSheetBackend, upsert } = await import('../src/lib/sheet.js');
+  const { setSearchFetch } = await import('../src/lib/search.js');
+  const { run } = await import('../src/crawlers/founders/index.js');
+  const gas = loadGas(); setSheetBackend(gas.backend);
+  await upsert('db_candidati', 'dominio', [{ dominio: 'qubo.ai', nome: 'Qubo', founder_nomi: 'Anna Rossi (CEO), Marco Bianchi (CTO)', stato_crawler: 'da_valutare' }]);
+  await upsert('db_valutazioni', 'id', [{ id: 'qubo.ai|sage', dominio: 'qubo.ai', classificatore: 'sage', esito: 'Needs verification', fit: 'Alto', voto: 70 }]);
+  const queries = [];
+  setSearchFetch(async url => { queries.push(new URL(url).searchParams.get('q')); return Response.json({ web: { results: [] } }); });
+  const st = await run(10, () => {});
+  assert.equal(queries.length, 1);
+  assert.equal(st.ricerche_persona, undefined);
 });
 
 test('tetto mensile Brave: contato da db_log, oltre il tetto niente ricerche', async () => {

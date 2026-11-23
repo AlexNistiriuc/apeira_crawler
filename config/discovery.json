@@ -48,6 +48,8 @@
     "2025"
   ],
   "ricerche_per_giro": 10,
+  "livello_massimo": 2,
+  "_nota_livelli": "23 nov 2026: livello 3 (settore + tipo + città + anno) spento, rendeva pochissimo. Rimettere 3 per riaccenderlo.",
   "tetto_mensile_scoperta": 580,
   "esplorazione": 0.3,
   "link_da_hub_per_giro": 12,

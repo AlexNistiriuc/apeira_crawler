@@ -10,6 +10,7 @@ import { discover } from './discover.js';
 import { adapterFor, runAdapter } from './directories.js';
 import { checkCandidate } from './check.js';
 import { STATO } from '../../signals/prefilter.js';
+import { HUB_OFFTOPIC } from '../../signals/patterns.js';
 
 // undici (la fetch di Node) a volte lancia un AssertionError (assert(!this.paused)) dentro un evento
 // del socket, fuori da ogni try/catch: il processo moriva e il giro andava perso. Lo ignoriamo e
@@ -34,7 +35,10 @@ export async function run({ deadline = deadlineFromNow(), log = console.log } = 
 
   const allHubs = await read(TABS.hub);
   // attivi e da_verificare (trovati dalla scoperta con un test leggero: se non rendono escono da soli)
-  const hubs = allHubs.filter(h => (h.stato === 'attivo' || h.stato === 'da_verificare') && h.tipo !== 'rete');
+  const active = allHubs.filter(h => (h.stato === 'attivo' || h.stato === 'da_verificare') && h.tipo !== 'rete');
+  // hub fuori tema già nel foglio (SEO, agenzie, eventi di altro tipo): non si leggono, passano a senza_resa
+  const offTopic = active.filter(h => HUB_OFFTOPIC.test(`${h.nome} ${h.url}`));
+  const hubs = active.filter(h => !offTopic.includes(h));
   // irraggiungibili: un nuovo tentativo al mese, con più pazienza e Jina, invece di abbandonarli per sempre
   const monthAgo = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
   const retry = allHubs.filter(h => h.stato === 'irraggiungibile' && h.tipo !== 'rete' && String(h.ultimo_crawl || '').slice(0, 10) < monthAgo)
@@ -51,6 +55,8 @@ export async function run({ deadline = deadlineFromNow(), log = console.log } = 
 
   const out = writer(TABS.cand, 'dominio', 200);   // blocchi grandi: ogni scrittura nel foglio ha un costo fisso
   const hubOut = writer(TABS.hub, 'hub_id', 50);
+  for (const h of offTopic) await hubOut.push({ hub_id: h.hub_id, stato: 'senza_resa', note: `fuori tema: ${(`${h.nome} ${h.url}`.match(HUB_OFFTOPIC) || [''])[0]}`.slice(0, 120) });
+  if (offTopic.length) { st.hub_fuori_tema = offTopic.length; log(`hub fuori tema messi senza_resa: ${offTopic.length}`); }
   const slowHosts = new Map();   // sito -> hub andati in timeout in questo giro
   const queue = [];                       // candidati nuovi da controllare
   const inRun = new Map();                // dominio -> candidato (dedup nel run)

@@ -10,6 +10,7 @@ export const STATO = { DA_VALUTARE: 'da_valutare', SCARTATA: 'scartata', MORTO: 
 export function preCheck({ dominio, hubs, trusted, anno_dichiarato }) {
   if (!trusted && P.JUNK.test(dominio)) return 'dominio di ente, media, investitore o big tech';
   if (!trusted && P.INVD.test(dominio)) return 'dominio da investitore o acceleratore';
+  if (!trusted && P.NOSTART_DOM.test(dominio)) return 'dominio di scuola, progetto o ente di ricerca';
   if (hubs.length && hubs.every(h => P.VCH.test(h))) return 'trovata solo in portfolio di VC (ha già raccolto)';
   if (hubs.length && hubs.every(h => P.JUNKHUB.test(h))) return 'trovata solo in directory generiche';
   if (anno_dichiarato && anno_dichiarato < C.min_founded_year) return `fondata nel ${anno_dichiarato} (dichiarato dalla fonte)`;
@@ -43,6 +44,7 @@ export function decide({ s, alive, trusted, registrato, archivio }) {
   if (!alive) return { stato: STATO.MORTO, motivo: 'sito non raggiungibile o vuoto' };
   if (s.corp && !trusted) return no('azienda grande o vecchia (quotata, centinaia di dipendenti, fondata prima del 2023)');
   if (s.inv && !trusted) return no('investitore, acceleratore o incubatore');
+  if (s.nostart && !trusted) return no(`non è una startup (sul sito: "${s.nostart}")`);
   if (s.fund.l >= 2) return no('round già chiuso: ' + s.fund.x.join(', '));
   if (!okDeep(s)) return no(`non deep tech (punteggio ${s.deep}, parole negative ${s.neg})`);
   const ys = statedYears(s);

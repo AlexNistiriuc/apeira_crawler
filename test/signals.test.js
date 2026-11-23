@@ -45,9 +45,17 @@ test('scarti certi: seed, fondazione vecchia, marketing, grande azienda', () => 
   s = mk('<p>Semiconductors and photonic chips. Over 1,200 employees in 30 countries. Investor relations.</p>');
   assert.match(decide({ s, alive: true }).motivo, /azienda grande/);
   assert.equal(decide({ s: emptySignals(), alive: false }).stato, STATO.MORTO);
+  s = mk('<p>Culham Plasma Physics Summer School 2026: fusion energy, plasma, tokamak, quantum and lasers for PhD students.</p>');
+  assert.match(decide({ s, alive: true }).motivo, /non è una startup .*summer school/);
+  s = mk('<p>CRC 1552: Defects and Defect Engineering in Soft Matter. Materials, semiconductors, quantum.</p>');
+  assert.match(decide({ s, alive: true }).motivo, /non è una startup/);
+  s = mk('<p>Qubo builds quantum chips and photonic qubits. This project has received funding from the EIC.</p>');
+  assert.doesNotMatch(decide({ s, alive: true }).motivo, /non è una startup/, 'una startup con un grant EU non è un progetto');
 });
 
 test('prefiltro senza rete', () => {
+  assert.match(preCheck({ dominio: 'culhamsummerschool.org.uk', hubs: [] }) || '', /scuola, progetto/);
+  assert.match(preCheck({ dominio: 'sfb1552.de', hubs: [] }) || '', /scuola, progetto/);
   assert.match(preCheck({ dominio: 'acme-ventures.com', hubs: ['x'] }), /investitore/);
   assert.match(preCheck({ dominio: 'foo.ai', hubs: ['Seedcamp portfolio'] }), /portfolio di VC/);
   assert.match(preCheck({ dominio: 'foo.ai', hubs: ['x'], anno_dichiarato: 2023 }), /2023/);
