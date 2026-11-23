@@ -25,7 +25,7 @@ test('criterio severo: età di un solo founder su due, niente Alto', () => {
 
 test('criterio severo: fondazione solo da indizio del dominio non basta', () => {
   const c = { ...base, registro: '', ev: { ...base.ev, anni_dichiarati: [] } };
-  assert.ok(strictAlto(c).manca.includes('fondazione verificata'));
+  assert.ok(strictAlto(c).manca.some(m => m.startsWith('fondazione verificata')));
 });
 
 test('criterio severo: settore debole e fuori Europa', () => {
@@ -77,4 +77,16 @@ test('riallineamento: declassa gli Alto automatici senza prove, non tocca le rig
   assert.equal(by['nofacts.ai|claude'].fit, 'Alto', 'righe claude: controllate a mano, non si toccano');
   assert.equal(by['nofacts.ai|sage'].fit, 'Medio');
   assert.equal(by['nofacts.ai|euristico'].fit, 'Basso');
+});
+
+test('criterio severo: non costituita, vale da quando ci lavorano se entro 3 anni', async () => {
+  const { workStartYear } = await import('../src/classifiers/strict.js');
+  const c = { ...base, registro: '', ev: { ...base.ev, anni_dichiarati: [] } };
+  const y = new Date().getUTCFullYear();
+  assert.equal(workStartYear('non costituita, ci lavorano dal 2024 (LinkedIn dei founder)'), 2024);
+  assert.equal(workStartYear('2024 (dichiarato sul sito)'), 0, 'serve "non costituita"');
+  assert.equal(strictAlto(c, { fondazione: `non costituita, ci lavorano dal ${y - 2} (LinkedIn)` }).ok, true);
+  assert.ok(!strictAlto(c, { fondazione: `non costituita, ci lavorano dal ${y - 5} (LinkedIn)` }).ok, 'oltre 3 anni no');
+  assert.equal(strictAlto(base, { fondazione: 'non costituita, ci lavorano dal 2015' }).ok, true, 'col registro vale il registro');
+  assert.equal(applyStrict({ esito: 'Needs verification', fit: 'Alto', voto: 80, motivo: 'x', fondazione: `non costituita, lavori dal ${y - 1} (profilo LinkedIn del CEO)` }, c).fit, 'Alto');
 });

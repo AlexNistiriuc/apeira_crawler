@@ -34,7 +34,7 @@ const OUTCOME_OPTIONS = [
 ];
 
 const FIT_OPTIONS = [
-  { option: 'high', description: 'Only if all five are proven by a source, not inferred: founded in 2025 or 2026 (company registry or year stated on the site); age of EVERY founder verified (registry or explicit public source) and under 35; deep-tech sector proven by the site, a grant or the registry description; European angle; no hard criterion violated.' },
+  { option: 'high', description: 'Only if all five are proven by a source, not inferred: founded in 2025 or 2026 (company registry or year stated on the site), or not yet incorporated with the founders working on it for at most 3 years, proven by a source; age of EVERY founder verified (registry or explicit public source) and under 35; deep-tech sector proven by the site, a grant or the registry description; European angle; no hard criterion violated.' },
   { option: 'medium', description: 'No hard criterion violated, but founding year, the age of every founder or the deep-tech sector is not yet verified by a source.' },
   { option: 'low', description: 'At least one hard criterion violated, or off-target: weakly deep-tech, non-European, too mature.' },
 ];

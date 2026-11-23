@@ -1,6 +1,9 @@
 // Criterio severo per il fit Alto (23 nov 2026, dal report degli agenti di Tommaso).
 // Alto solo se tutte e cinque le condizioni sono provate da una fonte, non dedotte:
-//  1. fondazione 2025 o 2026 verificata (registro imprese o anno dichiarato sul sito);
+//  1. fondazione 2025 o 2026 verificata (registro imprese o anno dichiarato sul sito); se la startup non è
+//     ancora costituita vale da quando i founder ci lavorano, se verificato da una fonte (per esempio il profilo
+//     LinkedIn controllato da una persona) ed entro max_anni_lavoro_non_costituita anni. Il valutatore lo scrive
+//     in `fondazione` come "non costituita, ci lavorano dal 2024 (fonte)";
 //  2. età di ogni founder verificata (registro imprese o fonte esplicita con nome) e sotto 35;
 //  3. settore deep tech provato (testo del sito con punteggio deep pieno);
 //  4. angolo europeo (luogo europeo sul sito o registro europeo);
@@ -13,8 +16,22 @@ import { parseJson, founderCount } from '../signals/facts.js';
 
 export const DEEP_MIN = 6;
 
-/** @returns {{ok:boolean, manca:string[]}} cosa manca a un candidato (riga di db_candidati) per essere Alto */
-export function strictAlto(c) {
+const thisYear = () => new Date().getUTCFullYear();
+
+/** Anno di inizio lavori per una startup non costituita, se il valutatore l'ha scritto in `fondazione`. */
+export function workStartYear(fondazione) {
+  const t = String(fondazione || '').toLowerCase();
+  if (!/non (ancora )?costituita|not (yet )?incorporated/.test(t)) return 0;
+  const m = t.match(/(?:lavor\w*|working|work)\D{0,20}(20\d\d)/);
+  return m ? Number(m[1]) : 0;
+}
+
+/**
+ * @param {object} c riga di db_candidati
+ * @param {object} [e] valutazione (serve solo `fondazione`, per le startup non costituite)
+ * @returns {{ok:boolean, manca:string[]}} cosa manca per essere Alto
+ */
+export function strictAlto(c, e = {}) {
   let ev = c.ev;
   if (!ev) { try { ev = c.evidenze ? JSON.parse(c.evidenze) : {}; } catch { ev = {}; } }
   const manca = [];
@@ -27,8 +44,11 @@ export function strictAlto(c) {
   const fy = (ev.anni_dichiarati || []).filter(y => y >= 2010 && y <= 2030);
   const siteYear = fy.length ? Math.min(...fy) : 0;
   const oldCopyright = ev.cmin && ev.cmin < C.min_founded_year;
-  const foundedOk = ry ? inRange(ry) : siteYear ? inRange(siteYear) && !oldCopyright : false;
-  if (!foundedOk) manca.push(ry || siteYear ? 'fondazione 2025-2026 (fonte in conflitto)' : 'fondazione verificata');
+  // non costituita: conta da quando ci lavorano, se una fonte lo prova ed è entro il limite di anni
+  const wy = ry ? 0 : workStartYear(e.fondazione);
+  const workOk = wy && wy >= thisYear() - C.max_anni_lavoro_non_costituita && wy <= thisYear();
+  const foundedOk = ry ? inRange(ry) : workOk || (siteYear ? inRange(siteYear) && !oldCopyright : false);
+  if (!foundedOk) manca.push(ry || siteYear || wy ? 'fondazione 2025-2026 o inizio lavori recente (fonte in conflitto)' : 'fondazione verificata (o inizio lavori, se non costituita)');
 
   // 2. età di tutti i founder
   const siteAges = (ev.fa?.a || []).map(Number).filter(Number.isFinite);
@@ -57,7 +77,7 @@ export function applyStrict(e, c) {
   const out = { ...e };
   if (out.esito === 'Esclusa' && out.fit !== 'Basso') { out.fit = 'Basso'; out._cambiata = true; }
   if (out.fit === 'Alto') {
-    const s = strictAlto(c);
+    const s = strictAlto(c, out);
     if (!s.ok) {
       out.fit = 'Medio';
       out.voto = Math.min(Number(out.voto) || 0, 69);

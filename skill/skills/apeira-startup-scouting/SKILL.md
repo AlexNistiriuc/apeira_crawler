@@ -136,7 +136,9 @@ or when the Sage classifier is unavailable.
    - `esito`: `Qualificata` / `Needs verification` / `Esclusa`.
    - `fit`: `Alto` / `Medio` / `Basso`, with the strict rule (since 23 Nov 2026, `src/classifiers/strict.js`).
      `Alto` only when all five are proven by a source, not inferred: founded 2025 or 2026 (registry or year
-     stated on the site, a domain date is not enough); age of EVERY founder verified (registry birth date or an
+     stated on the site, a domain date is not enough), or, if not yet incorporated, the founders have worked on it
+     for at most 3 years, proven by a source such as a LinkedIn profile checked by a person (write `fondazione` as
+     "non costituita, ci lavorano dal 2024 (fonte)"); age of EVERY founder verified (registry birth date or an
      explicit source naming the person) and under 35; deep-tech sector proven (site, grant or registry
      description); European angle; no hard criterion violated. `Medio` when nothing is violated but founding,
      age or sector is unverified. `Basso` when a criterion is violated or off-target; `Esclusa` is always `Basso`.
