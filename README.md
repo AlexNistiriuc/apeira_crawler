@@ -17,7 +17,8 @@ scrivono, ognuno solo nelle sue colonne:
 
 | pezzo | cosa fa | quando gira |
 | --- | --- | --- |
-| crawler hub | aggiunge pool: semi, reti di incubatori (EBN, UKSPA), snowball dai siti delle startup | GitHub Actions, alla fine di ogni giro del crawler startup |
+| crawler hub | aggiunge pool: semi, reti di incubatori (EBN, UKSPA), snowball dai siti delle startup; poi scoperta con ricerche web e scoperta da registro | GitHub Actions, a catena |
+| scoperta da registro | società costituite dal 2025 con codici di attività deep tech e tutti gli amministratori sotto 35 anni (Norvegia sempre, Regno Unito con la chiave): entrano in coda con età verificate | nel giro del crawler hub |
 | crawler startup | legge i pool, trova i siti delle startup, controlla età, funding, settore, team, contatti, salva le evidenze | GitHub Actions, a catena senza sosta (giri da ~45 minuti) |
 | classificatore euristico | i criteri rigidi della v1, come base di confronto | subito dopo ogni giro del crawler startup |
 | classificatore Sage | decide esito, fit e voto dopo l'euristico; completo (ricerca web + reasoning) per Fit Alto/Medio, leggero per Fit Basso | GitHub Actions, dopo ogni giro del crawler e a catena finché la coda non è vuota |
@@ -31,9 +32,10 @@ In **Startup trovate** entrano le startup valutate da uno dei valutatori elencat
 `VISTA_RICHIEDE` (es. `sage,claude`: basta uno dei due). Se dopo la valutazione l'euristico le esclude per fatti
 nuovi (registro imprese, età verificate, notizie di round), escono subito.
 
-**Crawler founder** (`npm run founders`, dopo l'euristico): per le startup migliori raccoglie una volta sola
-registro imprese (Francia gratis; Regno Unito con il secret `COMPANIES_HOUSE_KEY`, chiave gratuita di Companies House),
-età dei founder e notizie di funding. Le età da registro o dichiarate con nome e cognome sono verificate e possono
+**Crawler founder** (`npm run founders`, dopo l'euristico): per le startup Medio e Alto raccoglie una volta sola
+registro imprese (Francia, Norvegia e Repubblica Ceca gratis; Regno Unito con il secret `COMPANIES_HOUSE_KEY`,
+chiave gratuita di Companies House) e una ricerca ScrapeGraph su round e founder. Dal 23 novembre 2026 niente
+ricerche per persona (rendevano 1 età su 21 ricerche; `RICERCHE_PERSONA=1` le riaccende): l'età si prende dai registri. Le età da registro o dichiarate con nome e cognome sono verificate e possono
 escludere (35 anni o più); le stime ordinano soltanto. Le notizie salvate le riusano Sage e Claude senza nuove ricerche.
 Portfolio VC: nota e penalità, non esclusione.
 
@@ -41,6 +43,24 @@ Portfolio VC: nota e penalità, non esclusione.
 `SCOUTING_ATTIVO` con valore `no`. I giri in corso finiscono, i successivi non partono. Per ripartire cancellala.
 
 I consumi di Sage di ogni giro sono in `db_log` (statistiche.consumo: chiamate, token, ricerche web, giri completi e leggeri).
+
+## Ottimizzazioni del 23 novembre 2026
+
+Dopo una notte in cui l'87% dei crediti ScrapeGraph era andato alla scoperta di hub, con pochi risultati:
+- scoperta: niente più query di livello 3 (settore + tipo + città + anno; `livello_massimo` in `config/discovery.json`);
+  gli hub fuori tema (SEO, marketing, agenzie, software house, eventi d'altro tipo) o che non parlano di startup non si
+  aggiungono, e quelli già nel foglio passano a `senza_resa` senza leggerli (`HUB_OFFTOPIC` in `src/signals/patterns.js`);
+- prefiltro: scuole estive, centri e gruppi di ricerca, progetti con work package e consorzi, siti personali si
+  scartano come "non è una startup" (`NOSTART`, `NOSTART_DOM`);
+- crawler founder: una ricerca per startup, niente ricerche per persona;
+- registri con data di nascita: Norvegia (Brønnøysund) e Repubblica Ceca (ARES) oltre a Francia e Regno Unito, e la
+  scoperta da registro (`npm run registri`, `config/registri.json`). Ogni società letta si segna in `db_scoperta`
+  (tipo `registro`) per non rileggerla né ripagare la ricerca del suo sito. Prova delle API: workflow "prova registri";
+- lettura del sito: sitemap per i siti in JavaScript o senza link nel testo, la lingua del sito non si salta più, si
+  seguono i redirect a un altro dominio; se le pagine lette sono zero, `evidenze.sito.motivo_zero` dice perché;
+- scritture di agenti e Claude: azione `stage` in `db_appoggio`, senza il lock dei crawler; `merge`, `views` e la vista
+  oraria le portano nei tab veri. Richiede il nuovo `apps-script/Code.gs` incollato e ridistribuito.
+- criterio severo per il fit Alto (vedi `contracts/CLASSIFICATORI.md`).
 
 ## Struttura
 
@@ -55,9 +75,13 @@ src/lib/                     rete (diretta + Jina, robots.txt), HTML, foglio, co
 src/signals/                 euristiche pure: settori, funding, età, team, evidenze, prefiltro
 src/crawlers/hubs/           crawler degli hub
 src/crawlers/startups/       crawler delle startup (scoperta, directory, controllo, riga)
+src/crawlers/registri/       scoperta da registro (Norvegia, Regno Unito con la chiave)
+config/registri.json         codici di attività e limiti della scoperta da registro
 src/classifiers/             runner, contratto di uscita, classificatori euristico e Sage
 skill/                       skill di Claude per verifiche manuali e controllo salute
 tools/migrate-from-chrome.js porta nel foglio i dati della v1 rimasti in Chrome
+tools/export-recenti.js      esporta in sola lettura le startup da valutare recenti (workflow "esporta startup recenti")
+tools/prova-registri.js      prova in sola lettura le API dei registri (workflow "prova registri")
 test/                        test senza rete: euristiche, Code.gs su finto Sheets, pipeline completa
 ```
 

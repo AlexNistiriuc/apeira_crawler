@@ -21,8 +21,8 @@ dopo l'ultima valutazione. Ogni riga ha tutte le colonne di `db_candidati`. Le p
 | `evidenze` | JSON con tutto il resto (sotto) |
 | `pagine_lette` | URL delle pagine lette dal crawler, per verificare |
 | `eta_stimata`, `fonti_eta` | stima d'età di CEO e CTO (crawler founder): ordina, non esclude |
-| `eta_verificate` | JSON `[{nome, ruolo, min, max, fonte, url}]`: età da registro imprese (FR, UK) o dichiarata in una fonte con nome e cognome. Conta come verificata |
-| `registro` | JSON dal registro imprese (FR, UK): `costituita`, `aumenti_capitale` (SH01 UK), `persone` con età, `url` |
+| `eta_verificate` | JSON `[{nome, ruolo, min, max, fonte, url}]`: età da registro imprese (FR, UK, NO, CZ) o dichiarata in una fonte con nome e cognome. Conta come verificata. Le startup arrivate dalla scoperta da registro (`hub_origine` "registro NO codice ...") le hanno già tutte |
+| `registro` | JSON dal registro imprese (FR, UK, NO, CZ): `costituita`, `aumenti_capitale` (SH01 UK), `persone` con età, `url` |
 | `notizie_funding` | JSON `[{title, url, snippet}]`: una ricerca Brave del crawler founder, da riusare senza ripagarla |
 | `fatti_il` | data in cui il crawler founder ha raccolto questi fatti |
 | `round_notizie` | riassunto dei round e grant trovati nelle notizie (es. "EUR 3.5M (aventure.vc) · pre-seed"); lo mostra la vista |
@@ -59,6 +59,8 @@ Il criterio sta in `src/classifiers/strict.js` e vale per tutti:
 - Se manca un dato, lo si chiede ai crawler, non si cerca da soli sul web: workflow "crawler founder" con `domini` = elenco delle startup (rilegge tutto il sito e rifà registri, età e notizie), poi l'euristico ripassa.
 - Per chi passa il prefiltro il crawler legge tutto il sito (fino a 15 pagine e 90 secondi, priorità a careers, blog/news, about, investitori): in `evidenze` ci sono `sito` (pagine lette, posizioni aperte, sito grande) e gli estratti `estratto_careers`, `estratto_blog`, `estratto_about`, `estratto_investors`, `estratto_tech`. Vanno letti.
 - Ricerche web dei crawler: ScrapeGraph se c'è `SCRAPEGRAPH_API_KEY`, altrimenti Brave. Le pagine di linkedin.com non si leggono.
+- Se `evidenze.sito.pagine` è 0, `evidenze.sito.motivo_zero` dice perché (sito di una pagina, in JavaScript, pagine illeggibili): in quel caso il giudizio sul sito è debole e va detto in `da_verificare`.
+- Agenti e Claude scrivono con l'azione `stage` (tab `db_appoggio`, senza lock), non con `upsert`: niente più "Timeout di blocco" mentre girano i crawler. `views` unisce le righe e ricostruisce la vista; le righe rifiutate restano in `db_appoggio` con il motivo in `errore`.
 
 `evidenze` (JSON, versione 2):
 

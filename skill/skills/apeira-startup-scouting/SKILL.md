@@ -3,7 +3,7 @@ name: "apeira-startup-scouting"
 description: "Grade and qualify the startups found by the Apeira crawlers, twice a day, writing the results to the pool_founder_startup sheet, and check that the crawlers are healthy. Use this whenever Alex asks to evaluate, grade, qualify or review startups, run the morning or evening scouting check, look at Startup trovate, add a pool or hub, or asks how the Apeira crawler or scouting is doing, even if he doesn't name the skill."
 ---
 
-# Apeira startup scouting (v9)
+# Apeira startup scouting (v9.2)
 
 Goal: find young European deep-tech startups (founded 2025-2026, before a real pre-seed) for the
 Apeira hackerhouse, and rank them so Alex can contact the best ones first.
@@ -117,12 +117,18 @@ or when the Sage classifier is unavailable.
      question, and `web_fetch` on first-party or press results;
    - LinkedIn only as it appears in search result titles or on the startup's site. Never open
      linkedin.com pages.
+   - If `evidenze.sito.pagine` is 0, read `evidenze.sito.motivo_zero` (one-page site, JavaScript, unreadable pages) and
+     say in `da_verificare` that the site could not be read in full.
+   - Startups whose `hub_origine` starts with "registro" come from company registries (Norway, UK): founding date and
+     every director's age are already verified in `registro` and `eta_verificate`; what is left is the deep-tech proof.
    Spend effort where it changes the outcome: a candidate that is clearly `Esclusa` from the
    evidence needs no search. If budget runs out, write what you have as `Needs verification`.
 
-4. **Write the grades**, all in one call:
+4. **Write the grades**, all in one call, with `stage` (since 23 Nov 2026): rows go to `db_appoggio` without the
+   crawlers' lock, so writes no longer fail with "Timeout di blocco"; step 5 merges them. If `stage` answers
+   "azione sconosciuta", the sheet still runs the old Apps Script: use `upsert` and retry on lock timeouts.
    ```js
-   await api('upsert', { tab: 'db_valutazioni', key: 'id', rows: [ {
+   await api('stage', { tab: 'db_valutazioni', key: 'id', rows: [ {
      id: 'qubo.ai|claude', dominio: 'qubo.ai', classificatore: 'claude', versione: 'skill-v9',
      valutato_il: '2026-11-18 08:40:00',
      esito: 'Needs verification', fit: 'Medio', voto: 62,
@@ -149,7 +155,8 @@ or when the Sage classifier is unavailable.
    - Never write `nota_alex`.
    The sheet rejects invalid rows. If it answers `ok:false`, fix the row and retry.
 
-5. **Refresh the view**: `await api('views')`. This rebuilds the `Startup trovate` tab, the only visible one, which the apeira-outreach skill reads (its first 17 columns are the v1 ones; Stato is "Target" only for Qualificata). Classifier precedence is
+5. **Merge and refresh the view**: `await api('views')`. It first merges `db_appoggio` into the real tabs (rows it
+   rejects stay there with the reason in `errore`: check `(await api('read',{tab:'db_appoggio'})).rows`), then rebuilds the `Startup trovate` tab, the only visible one, which the apeira-outreach skill reads (its first 17 columns are the v1 ones; Stato is "Target" only for Qualificata). Classifier precedence is
    `sage`, then `claude`, then `euristico`.
 
 6. **Update Alex in Italian**, short, no em dashes and no colons in prose. Cover:
@@ -174,6 +181,11 @@ or when the Sage classifier is unavailable.
 - **A new classifier** (another model or script): see `contracts/CLASSIFICATORI.md`. To let it win
   over Claude in the view, change the script property `PRECEDENZA` in Apps Script.
 - **Alex asks how it is going**: read `db_log` and count `db_valutazioni` by `classificatore` and `esito`.
+  The components in `db_log` are `crawler startup`, `crawler hub`, `scoperta hub`, `scoperta da registro`,
+  `crawler founder` and the classifiers. ScrapeGraph credits left are in `statistiche.crediti_scrapegraph_rimasti`;
+  credits go to discovery searches, one funding search per Medio/Alto startup and, for registry discovery, one
+  search to find the site of a young company that has none in the registry.
+- **Stop everything**: disable the crawler workflows on GitHub, or set the repository variable `SCOUTING_ATTIVO` to `no`.
 
 ## Rules
 
