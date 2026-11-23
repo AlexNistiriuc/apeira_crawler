@@ -1,0 +1,19 @@
+name: esporta startup recenti
+on:
+  workflow_dispatch:
+    inputs:
+      dal: { description: 'primo_visto da (YYYY-MM-DD)', default: '2026-11-22' }
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: node tools/export-recenti.js
+        env:
+          SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
+          SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
+          DAL: ${{ inputs.dal }}
