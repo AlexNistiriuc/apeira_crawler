@@ -10,4 +10,6 @@ for (const v of await read(TABS.eval, { columns: ['dominio', 'classificatore', '
   if (!best[v.dominio] || p < best[v.dominio]._p) best[v.dominio] = { ...v, _p: p };
 }
 const out = cands.map(c => { const v = best[c.dominio] || {}; return { dominio: c.dominio, nome: c.nome, primo_visto: c.primo_visto, settori: c.settori, hub: String(c.hub_origine || '').slice(0, 120), email: c.email, founder: c.founder_nomi, fatti: c.fatti_il ? 'sì' : 'no', valutatore: v.classificatore || '', esito: v.esito || '', fit: v.fit || '', voto: v.voto || '', motivo: String(v.motivo || '').slice(0, 300), da_verificare: v.da_verificare || '' }; });
-console.log('EXPORT_START'); console.log(JSON.stringify(out)); console.log('EXPORT_END');
+import { writeFileSync } from 'node:fs';
+writeFileSync('export.json', JSON.stringify(out));
+console.log(`esportate ${out.length} startup in export.json`);

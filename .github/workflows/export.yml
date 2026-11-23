@@ -17,3 +17,5 @@ jobs:
           SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
           SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
           DAL: ${{ inputs.dal }}
+      - uses: actions/upload-artifact@v4
+        with: { name: export, path: export.json, retention-days: 3 }
