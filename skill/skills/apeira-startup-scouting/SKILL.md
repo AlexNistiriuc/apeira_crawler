@@ -119,7 +119,7 @@ or when the Sage classifier is unavailable.
    and news), wait for it, then grade. Never open linkedin.com pages.
    - If `evidenze.sito.pagine` is 0, read `evidenze.sito.motivo_zero` (one-page site, JavaScript, unreadable pages) and
      say in `da_verificare` that the site could not be read in full.
-   - Startups whose `hub_origine` starts with "registro" come from company registries (Norway, UK): founding date and
+   - Startups whose `hub_origine` starts with "registro" come from company registries (Norway, UK, France): founding date and
      every director's age are already verified in `registro` and `eta_verificate`; what is left is the deep-tech proof.
    Spend effort where it changes the outcome: a candidate that is clearly `Esclusa` from the
    evidence needs no search. If budget runs out, write what you have as `Needs verification`.
