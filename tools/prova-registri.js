@@ -1,7 +1,8 @@
 // Prova in sola lettura delle API dei registri (non scrive nel foglio). Stampa solo conteggi.
 const B = 'https://data.brreg.no/enhetsregisteret/api/enheter';
-for (const q of ['naeringskode=72.190&size=1', 'naeringskode=72.19&size=1', 'naeringskode=72.190&fraRegistreringsdatoEnhetsregisteret=2025-01-01&size=1', 'naeringskode=72.190&fraStiftelsesdato=2025-01-01&size=1', 'naeringskode=72.190&fraRegistreringsdatoEnhetsregisteret=2025-01-01&tilRegistreringsdatoEnhetsregisteret=2026-12-31&size=1', 'navn=Nara&size=1']) {
-  const r = await fetch(`${B}?${q}`, { headers: { Accept: 'application/json' } });
+const codes = ['72.100', '72.110', '72.120', '26.110', '26.120', '26.300', '26.510', '26.600', '27.200', '28.990', '30.300', '21.200', '71.122', '71.129', '62.010', '62.100'];
+for (const c of codes) for (const d of ['', '&fraRegistreringsdatoEnhetsregisteret=2025-01-01']) {
+  const r = await fetch(`${B}?naeringskode=${c}${d}&size=1`, { headers: { Accept: 'application/json' } });
   const j = r.ok ? await r.json() : null;
-  console.log('NOPROVA', r.status, q, 'totale', j?.page?.totalElements, 'esempio', JSON.stringify(j?._embedded?.enheter?.[0]?.naeringskode1 || null), j?._embedded?.enheter?.[0]?.registreringsdatoEnhetsregisteret, j?._embedded?.enheter?.[0]?.stiftelsesdato);
+  console.log('NOPROVA', c, d ? 'dal 2025' : 'tutte', r.status, j?.page?.totalElements, j?._embedded?.enheter?.[0]?.naeringskode1?.beskrivelse || '');
 }
