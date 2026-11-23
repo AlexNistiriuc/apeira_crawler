@@ -10,7 +10,9 @@
  * Tutte le richieste: POST con corpo JSON {token, action, ...}.
  * Solo lettura anche via GET: ?token=...&action=queue&classifier=claude&limit=30&rank_by=euristico
  *
- * Azioni: read, upsert, append, queue, views, ping.
+ * Azioni: read, upsert, append, queue, views, ping, stage, merge.
+ * stage (23 nov 2026): per agenti e Claude. Mette le righe in db_appoggio senza il lock dei crawler (niente
+ * "Timeout di blocco"); merge, la vista oraria e ogni views le portano nei tab veri sotto lock.
  * Il foglio è il database: i tab db_* (nascosti) sono scritti dai programmi, Startup trovate è la vista per le persone
  * e per l'agente di outreach. Le sue prime 17 colonne sono quelle della v1, nello stesso ordine.
  */
@@ -21,8 +23,10 @@ var SCHEMA = {
   db_candidati: { key: 'dominio', columns: ['dominio', 'nome', 'sito', 'hub_origine', 'primo_visto', 'ultimo_check', 'stato_crawler', 'motivo', 'dominio_registrato', 'primo_archivio', 'anni_sul_sito', 'settori', 'punteggio_deep', 'europa', 'segnali_funding', 'email', 'linkedin_azienda', 'linkedin_persone', 'founder_nomi', 'team_stima', 'descrizione', 'domanda_reale', 'evidenze', 'pagine_lette', 'versione_crawler', 'snowball_il', 'eta_stimata', 'fonti_eta', 'eta_il', 'registro', 'eta_verificate', 'notizie_funding', 'fatti_il', 'round_notizie'] },
   db_valutazioni: { key: 'id', columns: ['id', 'dominio', 'classificatore', 'versione', 'valutato_il', 'esito', 'fit', 'voto', 'motivo', 'fondazione', 'grant', 'investimenti', 'accesso_lab', 'team', 'eta_founder', 'under30', 'domanda_reale', 'da_verificare', 'fonti', 'nota_alex', 'eta_stimata', 'fonti_eta'] },
   db_log: { key: null, columns: ['componente', 'inizio', 'fine', 'statistiche'] },
-  db_scoperta: { key: 'query', columns: ['query', 'tipo', 'settore', 'luogo', 'livello', 'usata_il', 'risultati', 'hub_nuovi', 'hub_utili'] }
+  db_scoperta: { key: 'query', columns: ['query', 'tipo', 'settore', 'luogo', 'livello', 'usata_il', 'risultati', 'hub_nuovi', 'hub_utili'] },
+  db_appoggio: { key: null, columns: ['ricevuto_il', 'tab', 'chiave', 'riga', 'errore'] }
 };
+var STAGE_TABS = ['db_valutazioni', 'db_candidati'];   // cosa si può scrivere passando da db_appoggio
 var ENUMS = {
   'db_valutazioni.esito': ['Qualificata', 'Needs verification', 'Esclusa'],
   'db_valutazioni.fit': ['Alto', 'Medio', 'Basso'],
@@ -56,7 +60,9 @@ function handle_(p, readOnly) {
     if (a === 'queue') return { ok: true, rows: queue_(p.classifier, Number(p.limit || 200), p.rank_by, p.solo_nuove) };
     if (a === 'upsert') return withLock_(function () { return upsert_(p.tab, p.key, p.rows || []); });
     if (a === 'append') return withLock_(function () { return append_(p.tab, p.rows || []); });
-    if (a === 'views') return withLock_(function () { return buildViews_(); });
+    if (a === 'views') return withLock_(function () { var m = mergeStaging_(); var v = buildViews_(); v.appoggio = m; return v; });
+    if (a === 'stage') return stage_(p.tab, p.key, p.rows || []);
+    if (a === 'merge') return withLock_(function () { return mergeStaging_(); });
     return { ok: false, error: 'azione sconosciuta: ' + a };
   } catch (err) {
     return { ok: false, error: String(err && err.message || err) };
@@ -250,6 +256,51 @@ function append_(tab, rows) {
 }
 
 /**
+ * Scrittura senza lock (agenti, Claude): le righe vanno in db_appoggio, una per riga, e si controllano subito
+ * nel formato. Il lock non serve: appendRow su un tab che nessun altro riscrive.
+ */
+function stage_(tab, key, rows) {
+  if (STAGE_TABS.indexOf(tab) < 0) throw new Error('stage solo su ' + STAGE_TABS.join(', '));
+  if (key !== SCHEMA[tab].key) throw new Error('la chiave di ' + tab + ' è ' + SCHEMA[tab].key);
+  rows.forEach(function (r) { validate_(tab, r); if (!r[key]) throw new Error('manca ' + key); });
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName('db_appoggio') || ensureTab_(ss, 'db_appoggio', SCHEMA.db_appoggio.columns);
+  var ts = new Date().toISOString();
+  rows.forEach(function (r) { sh.appendRow([ts, tab, key, cell_(r), '']); });
+  return { ok: true, staged: rows.length };
+}
+
+/** Porta le righe di db_appoggio nei tab veri (da chiamare sotto lock). Le righe con errore restano, con il motivo. */
+function mergeStaging_() {
+  var sh = SpreadsheetApp.getActive().getSheetByName('db_appoggio');
+  if (!sh || sh.getLastRow() < 2) return { unite: 0, errori: 0 };
+  var t = table_(sh), H = {};
+  t.head.forEach(function (h, i) { H[h] = i; });
+  var groups = {}, keep = [], unite = 0;
+  t.data.forEach(function (r) {
+    if (String(r[H.errore] || '')) { keep.push(r); return; }
+    var g = r[H.tab] + '|' + r[H.chiave];
+    try { (groups[g] = groups[g] || { tab: String(r[H.tab]), key: String(r[H.chiave]), rows: [], raw: [] }).rows.push(JSON.parse(String(r[H.riga]))); groups[g].raw.push(r); }
+    catch (e) { r[H.errore] = 'riga non JSON'; keep.push(r); }
+  });
+  Object.keys(groups).forEach(function (g) {
+    var G = groups[g];
+    try { upsert_(G.tab, G.key, G.rows); unite += G.rows.length; }
+    catch (e) {
+      // un gruppo rifiutato: si riprova riga per riga, così una riga sbagliata non blocca le altre
+      G.rows.forEach(function (row, i) {
+        try { upsert_(G.tab, G.key, [row]); unite++; }
+        catch (e2) { var r = G.raw[i]; r[H.errore] = String(e2 && e2.message || e2).slice(0, 300); keep.push(r); }
+      });
+    }
+  });
+  sh.clearContents();
+  sh.getRange(1, 1, 1, t.head.length).setValues([t.head]);
+  if (keep.length) sh.getRange(2, 1, keep.length, t.head.length).setValues(keep.map(function (r) { return t.head.map(function (_, i) { return r[i] === undefined ? '' : r[i]; }); }));
+  return { unite: unite, errori: keep.length };
+}
+
+/**
  * Candidati da_valutare senza valutazione di quel classificatore, o valutati prima dell'ultimo controllo.
  * rank_by (facoltativo): nome di un altro classificatore. Mette prima i candidati con il suo voto più alto,
  * salta quelli che lui ha escluso e aggiunge a ogni riga il suo giudizio (pre_esito, pre_fit, pre_voto, pre_motivo).
@@ -302,7 +353,7 @@ function ageRank_(x) {
 }
 
 function buildViews() {
-  return withLock_(function () { return buildViews_(); });
+  return withLock_(function () { var m = mergeStaging_(); var v = buildViews_(); v.appoggio = m; return v; });
 }
 
 function buildViews_() {

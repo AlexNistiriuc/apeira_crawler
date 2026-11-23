@@ -115,6 +115,17 @@
         "hub_nuovi",
         "hub_utili"
       ]
+    },
+    "db_appoggio": {
+      "key": null,
+      "owner": "agenti e Claude (azione stage, senza lock); merge sotto lock lo svuota",
+      "columns": [
+        "ricevuto_il",
+        "tab",
+        "chiave",
+        "riga",
+        "errore"
+      ]
     }
   },
   "enums": {

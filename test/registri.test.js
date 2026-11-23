@@ -44,7 +44,7 @@ test('scoperta da registro: solo società giovani con sito, segnate per non rile
   delete process.env.SCRAPEGRAPH_API_KEY; delete process.env.SEARCH_API_KEY; delete process.env.COMPANIES_HOUSE_KEY;
   setRegistryFetch(async url => {
     url = String(url);
-    if (url.includes('naeringskode=72.190') && url.includes('page=0')) return Response.json({ _embedded: { enheter: [
+    if (url.includes('naeringskode=72.100') && url.includes('page=0')) return Response.json({ _embedded: { enheter: [
       { organisasjonsnummer: '1', navn: 'Young Labs AS', registreringsdatoEnhetsregisteret: '2025-06-01', hjemmeside: 'younglabs.no' },
       { organisasjonsnummer: '2', navn: 'Old Boys AS', registreringsdatoEnhetsregisteret: '2025-06-01', hjemmeside: 'oldboys.no' },
       { organisasjonsnummer: '3', navn: 'Nosite AS', registreringsdatoEnhetsregisteret: '2025-06-01' }] }, page: { totalPages: 1 } });

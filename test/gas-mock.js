@@ -24,6 +24,7 @@ class Sheet {
   getMaxRows() { return this.maxRows; } getMaxColumns() { return this.maxCols; }
   insertRowsAfter(_, n) { this.maxRows += n; } insertColumnsAfter(_, n) { this.maxCols += n; }
   setFrozenRows() {} clearContents() { this.cells = []; }
+  appendRow(a) { const n = this.getLastRow(); this.cells[n] = a.slice(); return this; }
   hideSheet() { this.hidden = true; return this; } showSheet() { this.hidden = false; return this; }
   getProtections() { return []; } copyTo(ss) { const c = ss.insertSheet(this.name + '_copia'); c.cells = JSON.parse(JSON.stringify(this.cells)); return c; } setName(n) { this.name = n; return this; } getName() { return this.name; }
 }
