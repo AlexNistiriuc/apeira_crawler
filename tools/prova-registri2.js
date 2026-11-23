@@ -1,5 +1,7 @@
-import { eachCsvRow } from '../src/crawlers/registri/lettonia.js';
-const types = {}, closed = {}; let n = 0, recent = 0; const sample = [];
-await eachCsvRow('https://dati.ur.gov.lv/register/register.csv', r => { n++; if (r.registered >= '2025-01-01') { recent++; types[r.type] = (types[r.type] || 0) + 1; closed[`${r.terminated ? 'T' : '-'}${r.closed || '-'}`] = (closed[`${r.terminated ? 'T' : '-'}${r.closed || '-'}`] || 0) + 1; if (sample.length < 3 && r.type === 'SIA') sample.push(JSON.stringify(r).slice(0, 300)); } }, fetch);
-console.log('LVD righe', n, 'dal 2025', recent, JSON.stringify(types), JSON.stringify(closed));
-for (const s of sample) console.log('LVD es', s);
+// Prova in sola lettura: Lettonia con la configurazione vera. Solo conteggi.
+import { readFileSync } from 'node:fs';
+import { latviaCompanies } from '../src/crawlers/registri/lettonia.js';
+const CFG = JSON.parse(readFileSync(new URL('../config/registri.json', import.meta.url), 'utf8'));
+const lv = await latviaCompanies(CFG.costituite_dal, new RegExp(CFG.lettonia_parole_nome, 'i'), fetch);
+const young = lv.filter(c => c.persone.length && c.persone.every(p => p.max != null && p.max <= 34));
+console.log('LV', lv.length, 'società dal 2025 con nome deep tech,', young.length, 'con tutti gli amministratori sotto 35 ·', young.slice(0, 10).map(c => c.nome).join(' | '));

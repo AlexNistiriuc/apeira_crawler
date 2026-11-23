@@ -52,9 +52,9 @@ export async function latviaCompanies(from, nameRe, fetchImpl = registryFetch) {
   registryStats.lv++;
   const comp = new Map();
   await eachCsvRow(`${BASE()}/register/register.csv`, r => {
-    if (!r.registered || r.registered < from || r.terminated || r.closed) return;
+    if (!r.registered || r.registered < from || String(r.terminated).trim() || String(r.closed).trim()) return;   // closed è uno spazio se attiva
     if (!/^(SIA|AS)$/.test(r.type)) return;
-    const nome = r.name_in_quotes || r.without_quotes || r.name || '';
+    const nome = r.name_in_quotes || r.name || '';
     if (!nameRe.test(nome)) return;
     comp.set(r.regcode, { paese: 'LV', numero: r.regcode, nome, costituita: r.registered, sito: '', url: `https://info.ur.gov.lv/#/legal-entity/${r.regcode}`, persone: [] });
   }, fetchImpl);

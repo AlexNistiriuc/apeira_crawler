@@ -100,7 +100,7 @@ test('Lettonia: età dal codice personale mascherato, filtro sul nome, solo SIA 
   assert.deepEqual(latviaAge('010203-*****', '', today), { min: 23, max: 23 });
   assert.equal(latviaAge('321234-*****', '', today), null, 'codice nuovo senza data');
   assert.deepEqual(splitCsv('1;"A ""B"" C";x'), ['1', 'A "B" C', 'x']);
-  const reg = 'regcode;name;name_in_quotes;type;registered;terminated;closed\n40200000001;"SIA ""Orbit Robotics""";Orbit Robotics;SIA;2025-05-02;;\n40200000002;"SIA ""Maizes Ceptuve""";Maizes Ceptuve;SIA;2025-05-02;;\n40200000003;"SIA ""Old Tech""";Old Tech;SIA;2019-01-01;;\n';
+  const reg = 'regcode;name;name_in_quotes;type;registered;terminated;closed\n40200000001;"SIA ""Orbit Robotics""";Orbit Robotics;SIA;2025-05-02;; \n40200000002;"SIA ""Maizes Ceptuve""";Maizes Ceptuve;SIA;2025-05-02;;\n40200000003;"SIA ""Old Tech""";Old Tech;SIA;2019-01-01;;\n';
   const off = 'at_legal_entity_registration_number;entity_type;position;governing_body;name;latvian_identity_number_masked;birth_date\n40200000001;NATURAL_PERSON;BOARD_MEMBER;EXECUTIVE_BOARD;Janis Berzins;140797-*****;\n';
   const f = async url => new Response(String(url).includes('officers') ? off : reg);
   const list = await latviaCompanies('2025-01-01', /robot|tech/i, f);
