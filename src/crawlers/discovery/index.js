@@ -15,7 +15,7 @@ import { getPage } from '../../lib/http.js';
 import { host, reg, bad, links, hubKey } from '../../lib/url.js';
 import { now, today } from '../../lib/config.js';
 import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed, searchLog, provider, sgCredits } from '../../lib/search.js';
-import { VCH, JUNKHUB, HUB_OFFTOPIC, STARTUP_ECO } from '../../signals/patterns.js';
+import { VCH, JUNKHUB, HUB_OFFTOPIC, HUB_NONEU, STARTUP_ECO } from '../../signals/patterns.js';
 import { hubType } from '../hubs/classify.js';
 
 const CFG = JSON.parse(readFileSync(new URL('../../../config/discovery.json', import.meta.url), 'utf8'));
@@ -66,6 +66,7 @@ export function pickQueries(used, stats, n, rnd = Math.random) {
 /** Hub fuori tema (SEO, marketing, agenzie, software house...) o che non parla di startup: non si aggiunge. */
 export function offTopicHub(url, title, md = '') {
   if (HUB_OFFTOPIC.test(`${title} ${url}`)) return 'fuori tema: ' + (`${title} ${url}`.match(HUB_OFFTOPIC) || [''])[0].toLowerCase();
+  if (HUB_NONEU.test(`${title} ${url}`)) return 'fuori Europa: ' + (`${title} ${url}`.match(HUB_NONEU) || [''])[0].toLowerCase();
   if (md && (String(md).match(STARTUP_ECO) || []).length < 2) return 'non parla di startup';
   return '';
 }

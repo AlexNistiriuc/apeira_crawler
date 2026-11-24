@@ -13,6 +13,8 @@ test('hub fuori tema o che non parla di startup: non si aggiunge', async () => {
   const { offTopicHub, looksLikePool } = await import('../src/crawlers/discovery/index.js');
   assert.match(offTopicHub('https://seosummit.hr/', 'Croatia SEO Summit 2027 | A conference'), /fuori tema/);
   assert.match(offTopicHub('https://vnt.io/', 'Your product & engineering partner | vnt'), /fuori tema/);
+  assert.match(offTopicHub('https://www.massrobotics.org/x', 'AWS Robotics Startup Accelerator - MassRobotics'), /fuori Europa/);
+  assert.equal(offTopicHub('https://www.biopole.ch/x', 'Vanguard Accelerator', 'startups founders cohort'), '');
   assert.equal(offTopicHub('https://x.eu/', 'Deep tech accelerator', 'startups founders cohort demo day'), '');
   assert.equal(offTopicHub('https://x.eu/', 'Partners', 'our partners and clients, one startup'), 'non parla di startup');
   const md = 'Our partners ' + Array.from({ length: 10 }, (_, i) => `[P${i}](https://p${i}.com/) teams`).join(' ');
