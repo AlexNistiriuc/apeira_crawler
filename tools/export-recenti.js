@@ -14,3 +14,8 @@ import { writeFileSync } from 'node:fs';
 writeFileSync('export.json', JSON.stringify(out));
 for (const r of out) console.log('ROW ' + JSON.stringify(r));
 console.log(`esportate ${out.length} startup in export.json`);
+
+// hub scoperti dal giorno indicato, con quello che hanno reso finora
+const hubs = (await read(TABS.hub)).filter(h => String(h.scoperto_il) >= dal);
+for (const h of hubs) console.log('HUB ' + JSON.stringify({ nome: String(h.nome).slice(0, 80), url: h.url, origine: h.origine, tipo: h.tipo, stato: h.stato, letto: h.ultimo_crawl ? 'sì' : 'no', candidati: h.candidati_trovati, da_valutare: h.candidati_da_valutare, note: String(h.note || '').slice(0, 80) }));
+console.log(`hub esportati ${hubs.length}`);
