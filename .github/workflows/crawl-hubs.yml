@@ -34,8 +34,12 @@ jobs:
           SEARCH_API_KEY: ${{ secrets.SEARCH_API_KEY }}
           SCRAPEGRAPH_API_KEY: ${{ secrets.SCRAPEGRAPH_API_KEY }}
       # scoperta da registro (Norvegia sempre, Regno Unito con la chiave): società giovani con sito, in coda al crawler startup
+      # tempo massimo suo e niente blocco della catena: il 24 nov un giro lento dei registri ha fatto scadere il job
+      # e la catena è rimasta ferma per ore
       - id: registri
         if: always()
+        timeout-minutes: 15
+        continue-on-error: true
         run: npm run registri
         env:
           SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
