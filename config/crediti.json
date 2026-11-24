@@ -1,4 +1,4 @@
 {
-  "pausa": true,
-  "_nota": "24 nov 2026, 01:18: Alex ha chiesto di non usare più crediti ScrapeGraph finché non lo dice lui. Con pausa true nessuna ricerca web (scoperta hub, ricerca dei siti da registro, crawler founder); hub, crawler startup, registri ed euristico continuano senza crediti. Rimettere false per riaccendere."
+  "pausa": false,
+  "_nota": "24 nov 2026, 18:32: Alex ha riacceso i crediti (pausa false): tutto riparte, scoperta hub con ricerche web e snowball, ricerca dei siti da registro, crawler founder e crawler LinkedIn. Rimettere true per fermare le ricerche web."
 }
