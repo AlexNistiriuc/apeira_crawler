@@ -3,10 +3,19 @@ on: workflow_dispatch
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: npm }
-      - run: npm ci
-      - run: node tools/prova-registri2.js
+      - name: Estonia, file aperti del registro
+        run: |
+          B=https://avaandmed.ariregister.rik.ee/sites/default/files/avaandmed
+          for f in ettevotja_rekvisiidid__lihtandmed.csv.zip ettevotja_rekvisiidid__kaardile_kantud_isikud.json.zip; do
+            curl -sSL -o $f "$B/$f" -w "$f %{http_code} %{size_download}\n"
+            file $f
+          done
+          unzip -l ettevotja_rekvisiidid__lihtandmed.csv.zip | head -5
+          unzip -p ettevotja_rekvisiidid__lihtandmed.csv.zip | head -c 1200; echo
+          echo "---"; unzip -p ettevotja_rekvisiidid__lihtandmed.csv.zip | grep -c "" || true
+          unzip -l ettevotja_rekvisiidid__kaardile_kantud_isikud.json.zip | head -5
+          unzip -p ettevotja_rekvisiidid__kaardile_kantud_isikud.json.zip | head -c 1500 | sed -E 's/([0-9]{11})/<CODICE11>/g'; echo
+          echo "codici 11 cifre nei primi 200KB:"; unzip -p ettevotja_rekvisiidid__kaardile_kantud_isikud.json.zip | head -c 200000 | grep -oE '"isikukood[^"]*":"?[0-9]{11}' | head -3 | sed -E 's/[0-9]{11}/<CODICE11>/'
+          curl -sSL "https://avaandmed.ariregister.rik.ee/en/downloading-open-data" | grep -oE 'avaandmed/[a-z_]+\.(csv|json|xml)\.zip' | sort -u | head -30
