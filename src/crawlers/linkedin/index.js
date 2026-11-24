@@ -279,6 +279,11 @@ export async function ensureLinkedin(c, { fit, force = false, write = true, year
     linkedinStats.non_disponibili++;
     return unavailable('crediti ScrapeGraph in pausa (config/crediti.json)');
   }
+  // LINKEDIN_SOLO_CACHE=1: ripassi veloci (es. dopo un cambio di regole), nessuna ricerca nuova
+  if (process.env.LINKEDIN_SOLO_CACHE === '1') {
+    linkedinStats.non_disponibili++;
+    return unavailable('solo cache LinkedIn in questo giro');
+  }
   if (provider() !== 'scrapegraph') {
     linkedinStats.non_disponibili++;
     return unavailable('SCRAPEGRAPH_API_KEY mancante');

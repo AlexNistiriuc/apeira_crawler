@@ -7,6 +7,7 @@ on:
       limite: { description: 'quanti candidati al massimo', default: '3000' }
       con_fatti: { description: 'ripassa tutte le startup con fatti del crawler founder (1 = sì)', default: '0' }
       riallinea: { description: 'prima riallinea tutte le valutazioni al criterio severo (1 = sì)', default: '0' }
+      solo_cache_linkedin: { description: 'nessuna nuova ricerca LinkedIn, usa solo i dati già salvati (1 = sì)', default: '0' }
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -26,6 +27,8 @@ jobs:
           SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
           SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
           CON_FATTI: ${{ inputs.con_fatti || '0' }}
+          LINKEDIN_SOLO_CACHE: ${{ inputs.solo_cache_linkedin || '0' }}
+          RUN_MINUTES: '50'
           REFRESH_VIEW: '1'
           SCRAPEGRAPH_API_KEY: ${{ secrets.SCRAPEGRAPH_API_KEY }}
           SCRAPEGRAPH_CACHE_DAYS: '30'
