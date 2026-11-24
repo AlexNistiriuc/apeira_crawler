@@ -14,7 +14,7 @@ import { read, upsert, logRun, TABS } from '../../lib/sheet.js';
 import { getPage } from '../../lib/http.js';
 import { host, reg, bad, links, hubKey } from '../../lib/url.js';
 import { now, today } from '../../lib/config.js';
-import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed, searchLog, provider, sgCredits } from '../../lib/search.js';
+import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed, searchLog, provider, sgCredits, creditsPaused } from '../../lib/search.js';
 import { VCH, JUNKHUB, HUB_OFFTOPIC, HUB_NONEU, STARTUP_ECO } from '../../signals/patterns.js';
 import { hubType } from '../hubs/classify.js';
 
@@ -151,11 +151,12 @@ export async function run({ log = console.log, deadline = Date.now() + CFG.minut
     setMonthlyUsed(monthlyUsed(logRows));
     const usedForDiscovery = monthlyUsed(logRows.filter(r => r.componente === 'scoperta hub'));
     // con ScrapeGraph nessun tetto mensile (si va finché ci sono crediti); con Brave il tetto dedicato alla scoperta
-    let budget = provider() === 'scrapegraph' ? CFG.ricerche_per_giro : Math.max(0, Math.min(CFG.ricerche_per_giro, CFG.tetto_mensile_scoperta - usedForDiscovery));
+    let budget = creditsPaused() ? 0 : provider() === 'scrapegraph' ? CFG.ricerche_per_giro : Math.max(0, Math.min(CFG.ricerche_per_giro, CFG.tetto_mensile_scoperta - usedForDiscovery));
     // il crawler startup ha già tanti hub mai letti: niente ricerche nuove finché non li smaltisce (crediti risparmiati)
     const unread = hubs.filter(h => /^(attivo|da_verificare)$/.test(h.stato) && !h.ultimo_crawl).length;
     if (unread > (CFG.pausa_se_hub_da_leggere ?? 80)) { budget = 0; st.pausa = `${unread} hub ancora da leggere`; }
     // riserva per i valutatori: sotto questa soglia la scoperta non usa più crediti
+    if (creditsPaused()) st.pausa = 'crediti in pausa (config/crediti.json)';
     if (budget && provider() === 'scrapegraph') { const cr = await sgCredits(); if (cr != null && cr < (CFG.riserva_crediti_valutatori ?? 5000)) { budget = 0; st.pausa = `crediti sotto la riserva per i valutatori (${cr})`; } }
     for (const p of pickQueries(new Set(byQ.keys()), stats, budget)) {
       const res = await webSearch(p.q, { count: 10 });
