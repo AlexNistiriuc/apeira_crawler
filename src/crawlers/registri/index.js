@@ -50,11 +50,16 @@ export async function run({ log = console.log, dry = process.env.DRY === '1' } =
   const key = r => `registro ${r.paese} ${r.numero}`;
   const out = [], seenRows = [];
   let budget = CFG.max_societa_per_giro;
+  // tempo massimo interno (il passo del workflow viene ucciso a 15 minuti e allora non si scrive niente):
+  // a scadenza si smette di leggere e si scrive quello che c'è
+  const t0 = Date.now(), maxMs = (Number(process.env.REGISTRI_MINUTI) || CFG.minuti_massimi || 11) * 60000;
+  const late = (margine = 0) => Date.now() - t0 > maxMs - margine;
   const quota = CFG.quota_per_paese || {};
   const usate = {}, cercate = {};
   const quotaOk = paese => (usate[paese] || 0) < (quota[paese]?.societa ?? Infinity);
 
   async function consider(r, people, codice, { senzaEta = false, ignoraBudget = false } = {}) {
+    if (late()) { st.fermato_per_tempo = true; return; }
     if (seenReg.has(key(r))) return;
     if (!ignoraBudget && !quotaOk(r.paese)) return;
     st.societa_lette++; if (!ignoraBudget) budget--; usate[r.paese] = (usate[r.paese] || 0) + 1;
@@ -90,19 +95,19 @@ export async function run({ log = console.log, dry = process.env.DRY === '1' } =
   }
 
   // Norvegia: API aperta
-  for (const nace of CFG.norvegia_nace) for (let p = 0; p < CFG.pagine_per_codice && budget > 0 && quotaOk('NO'); p++) {
+  for (const nace of CFG.norvegia_nace) for (let p = 0; p < CFG.pagine_per_codice && budget > 0 && !late() && quotaOk('NO'); p++) {
     const { items, pagine } = await norwaySearch(nace, CFG.costituite_dal, p);
     for (const r of items) { if (budget <= 0) break; await consider(r, norwayPeople, `NACE ${nace}`); await sleep(150); }
     if (p + 1 >= pagine) break;
   }
   // Regno Unito: solo con la chiave di Companies House
-  if (process.env.COMPANIES_HOUSE_KEY) for (const sic of CFG.uk_sic) for (let p = 0; p < CFG.pagine_per_codice && budget > 0 && quotaOk('UK'); p++) {
+  if (process.env.COMPANIES_HOUSE_KEY) for (const sic of CFG.uk_sic) for (let p = 0; p < CFG.pagine_per_codice && budget > 0 && !late() && quotaOk('UK'); p++) {
     const { items, pagine } = await ukSearch(sic, CFG.costituite_dal, p * 100);
     for (const r of items) { if (budget <= 0) break; await consider(r, ukPeople, `SIC ${sic}`); await sleep(300); }
     if (p + 1 >= pagine) break;
   } else st.uk = 'saltato: manca COMPANIES_HOUSE_KEY';
   // Francia: creazioni nel BODACC per parola dell'attività, età dei dirigenti dal registro (anno e mese)
-  for (const kw of CFG.francia_parole || []) for (let p = 0; p < CFG.pagine_per_codice && budget > 0 && quotaOk('FR'); p++) {
+  for (const kw of CFG.francia_parole || []) for (let p = 0; p < CFG.pagine_per_codice && budget > 0 && !late() && quotaOk('FR'); p++) {
     const { items, pagine } = await franceSearch(kw, CFG.costituite_dal, p * 100);
     for (const r of items) {
       if (budget <= 0) break;
@@ -113,14 +118,14 @@ export async function run({ log = console.log, dry = process.env.DRY === '1' } =
   }
 
   // Finlandia: registro senza età; entrano solo le società con il sito scritto nel registro
-  for (const code of CFG.finlandia_codici || []) for (let p = 1; p <= CFG.pagine_per_codice && budget > 0 && quotaOk('FI'); p++) {
+  for (const code of CFG.finlandia_codici || []) for (let p = 1; p <= CFG.pagine_per_codice && budget > 0 && !late() && quotaOk('FI'); p++) {
     const { items, pagine } = await finlandSearch(code, CFG.costituite_dal, p);
     for (const r of items) { if (budget <= 0) break; if (!r.sito) continue; await consider(r, null, `FI ${code}`, { senzaEta: true }); }
     if (p >= pagine) break;
   }
   // Lettonia: due file grandi (circa 170 MB), una volta al giorno; età dal codice personale, nome deep tech
   const lvKey = `registro LV giorno ${now().slice(0, 10)}`;
-  if (CFG.lettonia_parole_nome && !seenReg.has(lvKey) && budget > 0) {
+  if (CFG.lettonia_parole_nome && !seenReg.has(lvKey) && budget > 0 && !late(5 * 60000)) {
     const list = await latviaCompanies(CFG.costituite_dal, new RegExp(CFG.lettonia_parole_nome, 'i'));
     st.lettonia_societa = list.length;
     for (const r of list) { if (budget <= 0) break; const persone = r.persone; await consider(r, async () => persone, 'LV nome'); }
@@ -130,7 +135,7 @@ export async function run({ log = console.log, dry = process.env.DRY === '1' } =
   // Belgio: zip mensile dell'open data KBO (serve l'account), una volta al mese; niente età, solo imprese col sito
   const beKey = `registro BE mese ${now().slice(0, 7)}`;
   const beErr = `registro BE errore ${now().slice(0, 10)}`;   // dopo un errore si riprova il giorno dopo (niente login a raffica)
-  if (process.env.KBO_USER && process.env.KBO_PASSWORD && !seenReg.has(beKey) && !seenReg.has(beErr)) {
+  if (process.env.KBO_USER && process.env.KBO_PASSWORD && !seenReg.has(beKey) && !seenReg.has(beErr) && !late(7 * 60000)) {
     try {
       const { items, file } = await belgiumCompanies({ from: CFG.costituite_dal, codes: CFG.belgio_nace || [] });
       st.belgio = { file, imprese: items.length, con_sito: items.filter(x => x.sito).length };
@@ -142,6 +147,7 @@ export async function run({ log = console.log, dry = process.env.DRY === '1' } =
     }
   }
 
+  st.minuti = Math.round((Date.now() - t0) / 6000) / 10;
   if (!dry && out.length) await upsert(TABS.cand, 'dominio', out);
   if (!dry && seenRows.length) await upsert('db_scoperta', 'query', seenRows);
   st.per_paese = { societa: usate, ricerche_sito: cercate };

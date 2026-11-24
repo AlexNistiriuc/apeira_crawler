@@ -107,5 +107,7 @@
     "21200",
     "32500"
   ],
-  "_nota_belgio": "Belgio (24 nov 2026): open data KBO con account gratuito (secret KBO_USER e KBO_PASSWORD), zip mensile, una volta al mese. Niente persone: entrano solo le imprese attive dal 2025 con codice NACE deep tech e sito nel registro, senza ricerche."
+  "_nota_belgio": "Belgio (24 nov 2026): open data KBO con account gratuito (secret KBO_USER e KBO_PASSWORD), zip mensile, una volta al mese. Niente persone: entrano solo le imprese attive dal 2025 con codice NACE deep tech e sito nel registro, senza ricerche.",
+  "minuti_massimi": 11,
+  "_nota_tempo": "24 nov 2026: il passo registri del workflow ha 15 minuti; il crawler si ferma da solo a 11 e scrive quello che ha. Lettonia parte solo se restano 5 minuti, Belgio se ne restano 7."
 }
