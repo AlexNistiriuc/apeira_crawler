@@ -107,3 +107,17 @@ test('Lettonia: età dal codice personale mascherato, filtro sul nome, solo SIA 
   assert.deepEqual(list.map(x => x.nome), ['Orbit Robotics']);
   assert.equal(list[0].persone[0].nome, 'Janis Berzins'); assert.ok(list[0].persone[0].max <= 30);
 });
+
+test('Belgio: dai CSV del KBO alle imprese attive dal 2025 con NACE deep tech e sito', async () => {
+  const { belgiumFromCsv, splitComma, isoDate } = await import('../src/crawlers/registri/belgio.js');
+  assert.deepEqual(splitComma('"0712.345.678","A, B",x'), ['0712.345.678', 'A, B', 'x']);
+  assert.equal(isoDate('03-02-2025'), '2025-02-03');
+  const lines = arr => () => (async function* () { for (const l of arr) yield l; })();
+  const items = await belgiumFromCsv({
+    enterprise: lines(['"EnterpriseNumber","Status","JuridicalSituation","TypeOfEnterprise","JuridicalForm","JuridicalFormCAC","StartDate"', '"1001.001.001","AC","000","2","610","","03-02-2025"', '"1001.001.002","AC","000","2","610","","03-02-2019"', '"1001.001.003","AC","000","2","610","","01-06-2025"']),
+    activity: lines(['"EntityNumber","ActivityGroup","NaceVersion","NaceCode","Classification"', '"1001.001.001","001","2008","72190","MAIN"', '"1001.001.002","001","2008","72190","MAIN"', '"1001.001.003","001","2008","56101","MAIN"']),
+    denomination: lines(['"EntityNumber","Language","TypeOfDenomination","Denomination"', '"1001.001.001","2","001","Qubit Labs"']),
+    contact: lines(['"EntityNumber","EntityContact","ContactType","Value"', '"1001.001.001","ENT","WEB","www.qubitlabs.be"']),
+  }, { from: '2025-01-01', codes: ['72190'] });
+  assert.deepEqual(items.map(x => [x.nome, x.costituita, x.sito]), [['Qubit Labs', '2025-02-03', 'www.qubitlabs.be']]);
+});

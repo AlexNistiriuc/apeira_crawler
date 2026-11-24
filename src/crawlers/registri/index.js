@@ -12,6 +12,7 @@ import { CRITERIA as C } from '../../lib/config.js';
 import { reg, host, bad } from '../../lib/url.js';
 import { norwaySearch, norwayPeople, ukSearch, ukPeople, franceSearch, francePeople, finlandSearch, normName, registryStats } from '../../lib/registry.js';
 import { latviaCompanies } from './lettonia.js';
+import { belgiumCompanies } from './belgio.js';
 import { webSearch, searchEnabled, searchLog } from '../../lib/search.js';
 import { sleep } from '../../lib/http.js';
 
@@ -53,10 +54,10 @@ export async function run({ log = console.log, dry = process.env.DRY === '1' } =
   const usate = {}, cercate = {};
   const quotaOk = paese => (usate[paese] || 0) < (quota[paese]?.societa ?? Infinity);
 
-  async function consider(r, people, codice, { senzaEta = false } = {}) {
+  async function consider(r, people, codice, { senzaEta = false, ignoraBudget = false } = {}) {
     if (seenReg.has(key(r))) return;
-    if (!quotaOk(r.paese)) return;
-    st.societa_lette++; budget--; usate[r.paese] = (usate[r.paese] || 0) + 1;
+    if (!ignoraBudget && !quotaOk(r.paese)) return;
+    st.societa_lette++; if (!ignoraBudget) budget--; usate[r.paese] = (usate[r.paese] || 0) + 1;
     seenReg.add(key(r));
     const mark = esito => seenRows.push({ query: key(r), tipo: 'registro', settore: codice, luogo: r.paese, livello: 'registro', usata_il: now().slice(0, 10), risultati: 1, hub_nuovi: esito === 'in coda' ? 1 : 0, hub_utili: 0 });
     const persone = senzaEta ? [] : await people(r.numero);
@@ -124,6 +125,21 @@ export async function run({ log = console.log, dry = process.env.DRY === '1' } =
     st.lettonia_societa = list.length;
     for (const r of list) { if (budget <= 0) break; const persone = r.persone; await consider(r, async () => persone, 'LV nome'); }
     seenRows.push({ query: lvKey, tipo: 'registro', settore: 'LV', luogo: 'LV', livello: 'registro', usata_il: now().slice(0, 10), risultati: list.length, hub_nuovi: 0, hub_utili: 0 });
+  }
+
+  // Belgio: zip mensile dell'open data KBO (serve l'account), una volta al mese; niente età, solo imprese col sito
+  const beKey = `registro BE mese ${now().slice(0, 7)}`;
+  const beErr = `registro BE errore ${now().slice(0, 10)}`;   // dopo un errore si riprova il giorno dopo (niente login a raffica)
+  if (process.env.KBO_USER && process.env.KBO_PASSWORD && !seenReg.has(beKey) && !seenReg.has(beErr)) {
+    try {
+      const { items, file } = await belgiumCompanies({ from: CFG.costituite_dal, codes: CFG.belgio_nace || [] });
+      st.belgio = { file, imprese: items.length, con_sito: items.filter(x => x.sito).length };
+      for (const r of items) { if (!r.sito) continue; await consider(r, null, `BE ${r.attivita}`, { senzaEta: true, ignoraBudget: true }); }
+      seenRows.push({ query: beKey, tipo: 'registro', settore: 'BE', luogo: 'BE', livello: 'registro', usata_il: now().slice(0, 10), risultati: items.length, hub_nuovi: 0, hub_utili: 0 });
+    } catch (e) {
+      st.belgio = 'errore: ' + e.message;
+      seenRows.push({ query: beErr, tipo: 'registro', settore: 'BE', luogo: 'BE', livello: 'registro', usata_il: now().slice(0, 10), risultati: 0, hub_nuovi: 0, hub_utili: 0 });
+    }
   }
 
   if (!dry && out.length) await upsert(TABS.cand, 'dominio', out);

@@ -65,7 +65,7 @@
     "32500"
   ],
   "lettonia_parole_nome": "\\b(robot\\w*|robotic\\w*|quantum|space|aero\\w*|drone\\w*|photon\\w*|laser\\w*|semicond\\w*|chips?|fusion|nano\\w*|bio\\w*|medtech|dynamics|sensors?|optic\\w*|satellit\\w*|rocket\\w*|batter\\w*|hydrogen|materials?|deep ?tech|defen[cs]e|autonom\\w*|neuro\\w*|genom\\w*|cell|thera\\w*)\\b",
-  "_nota_altri_paesi": "Finlandia (PRH): data e attività ma niente età, entrano solo con il sito nel registro. Lettonia: età dal codice personale, niente attività, filtro sul nome, una volta al giorno. Esclusi per ora perché servono registrazione, pagamento o non c'è un'API aperta: Germania, Austria, Svizzera (Zefix richiede account), Paesi Bassi, Belgio (KBO richiede account), Danimarca, Svezia, Irlanda, Spagna, Portogallo, Italia (report startup innovative dietro sessione), Polonia (KRS senza data di nascita e senza ricerca per data), Estonia (open data in file da decine di MB, da fare).",
+  "_nota_altri_paesi": "Finlandia (PRH): data e attività ma niente età, entrano solo con il sito nel registro. Lettonia: età dal codice personale, niente attività, filtro sul nome, una volta al giorno. Esclusi per ora perché servono registrazione, pagamento o non c'è un'API aperta: Germania, Austria, Svizzera (Zefix richiede account), Paesi Bassi, Danimarca, Svezia, Irlanda, Spagna, Portogallo, Italia (report startup innovative dietro sessione), Polonia (KRS senza data di nascita e senza ricerca per data), Estonia (open data verificato il 24 nov: codici personali cifrati, data di nascita solo per il 4% delle persone, quindi niente età).",
   "quota_per_paese": {
     "NO": {
       "societa": 50,
@@ -88,5 +88,24 @@
       "ricerche_sito": 0
     }
   },
-  "_nota_quote": "24 nov 2026: senza quote il Regno Unito si prendeva tutto il budget e Francia, Lettonia e Finlandia non arrivavano mai. Ogni paese ha la sua quota di società lette e di ricerche del sito per giro."
+  "_nota_quote": "24 nov 2026: senza quote il Regno Unito si prendeva tutto il budget e Francia, Lettonia e Finlandia non arrivavano mai. Ogni paese ha la sua quota di società lette e di ricerche del sito per giro.",
+  "belgio_nace": [
+    "72110",
+    "72190",
+    "72100",
+    "26110",
+    "26120",
+    "26200",
+    "26300",
+    "26510",
+    "26600",
+    "26700",
+    "27200",
+    "28990",
+    "30300",
+    "21100",
+    "21200",
+    "32500"
+  ],
+  "_nota_belgio": "Belgio (24 nov 2026): open data KBO con account gratuito (secret KBO_USER e KBO_PASSWORD), zip mensile, una volta al mese. Niente persone: entrano solo le imprese attive dal 2025 con codice NACE deep tech e sito nel registro, senza ricerche."
 }
