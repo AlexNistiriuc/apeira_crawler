@@ -80,7 +80,7 @@ async function latestZip(fetchImpl, user, pass) {
   if (/login_error/.test(login.url || '') || /j_password/.test(html)) throw new Error('login KBO rifiutato');
   const pages = [html];
   for (const p of ['/kbo-open-data/affiliation/xml/?files', '/kbo-open-data/affiliation/xml/']) { const r = await follow(BASE + p); if (r.ok) pages.push(await r.text()); }
-  const links = [...new Set(pages.join('\n').match(/[^"'\s>]*KboOpenData_\d+_\d{4}_\d{2}_Full\.zip/g) || [])].sort();
+  const links = [...new Set(pages.join('\n').match(/[^"'\s>]*KboOpenData_\d+_\d{4}_\d{2}(?:_\d{2})?_Full\.zip/g) || [])].sort();
   if (!links.length) throw new Error('nessun file Full.zip trovato dopo il login');
   return { url: new URL(links.at(-1), `${BASE}/kbo-open-data/affiliation/xml/`).href, cookie: cookies() };
 }

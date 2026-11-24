@@ -3,22 +3,13 @@ on: workflow_dispatch
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 30
     steps:
-      - name: Belgio, login KBO open data e lista dei file (solo nomi)
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: node tools/prova-registri2.js
         env:
           KBO_USER: ${{ secrets.KBO_USER }}
           KBO_PASSWORD: ${{ secrets.KBO_PASSWORD }}
-        run: |
-          echo "secret presenti: user=$([ -n "$KBO_USER" ] && echo sì || echo no) password=$([ -n "$KBO_PASSWORD" ] && echo sì || echo no)"
-          B=https://kbopub.economie.fgov.be/kbo-open-data
-          curl -sSL -c c.txt -b c.txt "$B/login?lang=en" -o l.html
-          A=$(grep -oE '<form[^>]*action="[^"]+"' l.html | head -1 | grep -oE 'action="[^"]+"' | cut -d'"' -f2); echo "action: $A"
-          curl -sSL -c c.txt -b c.txt -o after.html -w "login %{http_code} %{url_effective}\n" --data-urlencode "j_username=$KBO_USER" --data-urlencode "j_password=$KBO_PASSWORD" "https://kbopub.economie.fgov.be$A"
-          grep -oiE '(bad credentials|invalid|incorrect|error)[^<]{0,80}' after.html | head -3
-          grep -oE 'href="[^"]+"' after.html | grep -viE 'resources|belgium.be|economie.fgov|lang=' | head -15
-          for p in "affiliation/prexml?form=" "affiliation/xml/?files" "affiliation/xml/"; do
-            echo "=== $p"; curl -sSL -c c.txt -b c.txt "$B/$p" -o x.html -w "%{http_code} %{url_effective}\n"
-            sed -e 's/<[^>]*>/ /g' x.html | tr -s ' \n' ' ' | grep -oE '(Open Data|condition|accept|agree|licen|subscri|file|Full|Update|zip)[^.]{0,160}' | head -12
-            grep -oE '<(form|input|a)[^>]*>' x.html | grep -viE 'resources|lang=|belgium.be|economie.fgov' | head -12
-          done
