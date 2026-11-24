@@ -1,7 +1,7 @@
 // Scoperta da registro: parte dalle società, non dagli hub. Registri con data di nascita degli amministratori
 // (Norvegia e Francia sempre, Regno Unito con COMPANIES_HOUSE_KEY), per codice di attività e costituite di recente.
 // Una società entra in db_candidati (stato da_ricontrollare, così il crawler startup ne legge il sito) solo se:
-//  - tutti gli amministratori con data di nascita hanno meno di 35 anni (almeno uno);
+//  - almeno un amministratore con data di nascita ha meno di 35 anni (dal 24 nov 2026; prima servivano tutti);
 //  - ha un sito: dal registro o, se manca, da una ricerca (al massimo ricerche_sito_per_giro a giro).
 // registro ed eta_verificate si scrivono subito: il criterio severo li legge come età verificate.
 // Uso: npm run registri        (DRY=1 non scrive nel foglio, stampa solo)
@@ -26,7 +26,8 @@ export function siteDomain(s) {
 }
 
 /** Tutti giovani: almeno una persona con età nota e nessuna oltre il limite. */
-export const allYoung = persone => persone.length > 0 && persone.every(p => p.max != null && p.max <= C.max_founder_age);
+export const anyYoung = persone => persone.some(p => p.max != null && p.max <= C.max_founder_age);
+export const allYoung = anyYoung;   // nome vecchio, stesso significato nuovo
 
 /** Il sito trovato con una ricerca è della società se il dominio contiene una parola distintiva del nome. */
 export function siteFromResults(name, results) {
@@ -66,7 +67,7 @@ export async function run({ log = console.log, dry = process.env.DRY === '1' } =
     seenReg.add(key(r));
     const mark = esito => seenRows.push({ query: key(r), tipo: 'registro', settore: codice, luogo: r.paese, livello: 'registro', usata_il: now().slice(0, 10), risultati: 1, hub_nuovi: esito === 'in coda' ? 1 : 0, hub_utili: 0 });
     const persone = senzaEta ? [] : await people(r.numero);
-    if (!senzaEta && !allYoung(persone)) return mark(persone.length ? 'amministratori 35+' : 'senza età');
+    if (!senzaEta && !anyYoung(persone)) return mark(persone.length ? 'amministratori tutti 35+' : 'senza età');
     if (!senzaEta) st.giovani++;
     let dom = siteDomain(r.sito);
     // registri senza età (Finlandia): niente ricerca del sito, si prende solo quello scritto nel registro
@@ -84,7 +85,7 @@ export async function run({ log = console.log, dry = process.env.DRY === '1' } =
     const registro = { paese: r.paese, numero: r.numero, nome: r.nome, costituita: r.costituita, aumenti_capitale: [], persone: persone.map(p => ({ nome: p.nome, ruolo: p.ruolo, min: p.min, max: p.max })), url: r.url || (r.paese === 'UK' ? `https://find-and-update.company-information.service.gov.uk/company/${r.numero}` : '') };
     out.push({
       dominio: dom, nome: r.nome, sito: `https://${dom}/`, hub_origine: `registro ${r.paese} codice ${codice}`, primo_visto: now(), ultimo_check: now(),
-      stato_crawler: 'da_ricontrollare', motivo: `dal registro ${r.paese}: costituita ${r.costituita}` + (senzaEta ? ', età non nel registro' : `, amministratori sotto ${C.max_founder_age + 1} anni`),
+      stato_crawler: 'da_ricontrollare', motivo: `dal registro ${r.paese}: costituita ${r.costituita}` + (senzaEta ? ', età non nel registro' : `, almeno un amministratore sotto ${C.max_founder_age + 1} anni`),
       founder_nomi: persone.map(p => p.nome).join(', '),
       registro: JSON.stringify(registro),
       ...(senzaEta ? {} : { eta_verificate: JSON.stringify(persone.map(p => ({ nome: p.nome, ruolo: p.ruolo, min: p.min, max: p.max, fonte, url: registro.url }))) }),

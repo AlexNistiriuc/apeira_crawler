@@ -3,7 +3,7 @@ name: "apeira-startup-scouting"
 description: "Grade and qualify the startups found by the Apeira crawlers, twice a day, writing the results to the pool_founder_startup sheet, and check that the crawlers are healthy. Use this whenever Alex asks to evaluate, grade, qualify or review startups, run the morning or evening scouting check, look at Startup trovate, add a pool or hub, or asks how the Apeira crawler or scouting is doing, even if he doesn't name the skill."
 ---
 
-# Apeira startup scouting (v9.2)
+# Apeira startup scouting (v9.3)
 
 Goal: find young European deep-tech startups (founded 2025-2026, before a real pre-seed) for the
 Apeira hackerhouse, and rank them so Alex can contact the best ones first.
@@ -12,7 +12,7 @@ Since v9 the work is split in three independent parts that only talk through the
 `pool_founder_startup` (id `1MY3J2S6xg0ftZziP7lGiVTrtft2UxapE3SYDc_JDolU`, account alex@apeira.it):
 
 - **Crawler hub** (GitHub Actions, in a chain): keeps the list of pools in `db_hub`, finds new ones with
-  ScrapeGraph searches, and runs the registry discovery (young companies with every director under 35).
+  ScrapeGraph searches, and runs the registry discovery (young companies with at least one director under 35).
 - **Crawler startup** (GitHub Actions, every hour in runs of ~50 minutes, so almost nonstop): finds candidate sites in the pools, checks age,
   funding, sector, team and contacts, and writes every candidate with its evidence to `db_candidati`.
   It only discards what is certain; everything else is `stato_crawler = da_valutare`.
@@ -33,7 +33,7 @@ Qualify a company only when the evidence supports all of these:
 - total grants of US$1M or less;
 - total outside investment of US$500k or less;
 - team of five or fewer;
-- every founder under 35, with teams whose founders are all under 30 ranked first.
+- at least one founder under 35 (since 24 Nov 2026 one is enough, not all), with teams whose founders are all under 30 ranked first.
 
 Also wanted, used for Fit and voto rather than as hard gates: technical founders, real demand
 (customers, revenue, an active pilot), a European angle, and one of these sectors: quantum,
@@ -139,7 +139,7 @@ or when the Sage classifier is unavailable.
    - If `evidenze.sito.pagine` is 0, read `evidenze.sito.motivo_zero` (one-page site, JavaScript, unreadable pages) and
      say in `da_verificare` that the site could not be read in full.
    - Startups whose `hub_origine` starts with "registro" come from company registries (Norway, UK, France, Latvia; Finland gives no ages): founding date and
-     every director's age are already verified in `registro` and `eta_verificate`; what is left is the deep-tech proof.
+     the directors' ages are already verified in `registro` and `eta_verificate`; what is left is the deep-tech proof.
    Spend effort where it changes the outcome: a candidate that is clearly `Esclusa` from the
    evidence needs no search. If budget runs out, write what you have as `Needs verification`.
 
@@ -155,7 +155,7 @@ or when the Sage classifier is unavailable.
      fondazione: '2025 (dichiarato su qubo.ai/about)', grant: 'Not disclosed', investimenti: 'Not disclosed',
      accesso_lab: 'shared or third-party: TU Delft cleanroom', team: '3 (dichiarato sul sito)',
      eta_founder: 'non verificata', under30: 'no', domanda_reale: 'pilot con operatore telecom europeo',
-     da_verificare: 'età verificata di ogni founder, investimenti', fonti: 'https://qubo.ai/about, https://...' } ] })
+     da_verificare: 'età verificata di almeno un founder, investimenti', fonti: 'https://qubo.ai/about, https://...' } ] })
    ```
    Field meanings and allowed values are in `contracts/CLASSIFICATORI.md`. In short:
    - `esito`: `Qualificata` / `Needs verification` / `Esclusa`.
@@ -163,8 +163,8 @@ or when the Sage classifier is unavailable.
      `Alto` only when all five are proven by a source, not inferred: founded 2025 or 2026 (registry or year
      stated on the site, a domain date is not enough), or, if not yet incorporated, the founders have worked on it
      for at most 3 years, proven by a source such as a LinkedIn profile checked by a person (write `fondazione` as
-     "non costituita, ci lavorano dal 2024 (fonte)"); age of EVERY founder verified (registry birth date or an
-     explicit source naming the person) and under 35; deep-tech sector proven (site, grant or registry
+     "non costituita, ci lavorano dal 2024 (fonte)"); at least ONE founder with a verified age under 35 (registry
+     birth date or an explicit source naming the person; one is enough, not all); deep-tech sector proven (site, grant or registry
      description); European angle; no hard criterion violated. `Medio` when nothing is violated but founding,
      age or sector is unverified. `Basso` when a criterion is violated or off-target; `Esclusa` is always `Basso`.
      A registry-only company without a site stays `Medio` with motivo "CANDIDATO ALTO DA REGISTRO".

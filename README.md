@@ -23,7 +23,7 @@ scrivono, ognuno solo nelle sue colonne:
 | pezzo | cosa fa | quando gira |
 | --- | --- | --- |
 | crawler hub | aggiunge pool: semi, reti di incubatori (EBN, UKSPA), snowball dai siti delle startup; poi scoperta con ricerche web e scoperta da registro | GitHub Actions, a catena |
-| scoperta da registro | società costituite dal 2025 con attività deep tech e tutti gli amministratori sotto 35 anni (Norvegia per codice NACE, Regno Unito per codice SIC, Francia per parole dell'attività nel BODACC, Lettonia per nome dall'open data una volta al giorno): entrano in coda con età verificate. Finlandia (PRH) per codice di attività e Belgio (open data KBO, con account: secret KBO_USER e KBO_PASSWORD, una volta al mese), senza età: entrano solo con il sito scritto nel registro. Gli hub fuori Europa (Stati Uniti, Canada, Asia...) non si aggiungono e non si leggono. Gli altri paesi europei non hanno un registro aperto con data di nascita o ricerca per data: vedi `_nota_altri_paesi` in `config/registri.json` | nel giro del crawler hub |
+| scoperta da registro | società costituite dal 2025 con attività deep tech e almeno un amministratore sotto 35 anni (Norvegia per codice NACE, Regno Unito per codice SIC, Francia per parole dell'attività nel BODACC, Lettonia per nome dall'open data una volta al giorno): entrano in coda con età verificate. Finlandia (PRH) per codice di attività e Belgio (open data KBO, con account: secret KBO_USER e KBO_PASSWORD, una volta al mese), senza età: entrano solo con il sito scritto nel registro. Gli hub fuori Europa (Stati Uniti, Canada, Asia...) non si aggiungono e non si leggono. Gli altri paesi europei non hanno un registro aperto con data di nascita o ricerca per data: vedi `_nota_altri_paesi` in `config/registri.json` | nel giro del crawler hub |
 | crawler startup | legge i pool, trova i siti delle startup, controlla età, funding, settore, team, contatti, salva le evidenze | GitHub Actions, a catena senza sosta (giri da ~45 minuti) |
 | crawler LinkedIn | per le startup Alto/Medio chiama ScrapeGraph (in pausa se `config/crediti.json` ha `pausa: true`) e ricava dipendenti, anno di fondazione, data di inizio dei founder ed età stimata dalla prima esperienza educativa; scrive `linkedin_dati`, `linkedin_fonti`, `linkedin_il` (le colonne del crawler founder restano separate) | dentro ogni classificazione (black box `ensureLinkedin`) e con `npm run linkedin` / workflow `crawler LinkedIn` |
 | classificatore euristico | i criteri rigidi della v1, come base di confronto | subito dopo ogni giro del crawler startup |
@@ -189,7 +189,7 @@ stesse (portate 1:1 in `src/signals/patterns.js` e `scan.js`), con queste differ
 
 - età minima allineata ai criteri rigidi: fondazione dal 2025 (`config/criteria.json`);
 - il Fit non lo decide più il crawler ma il classificatore, con il criterio severo dal 23 novembre 2026
-  (Alto solo con fondazione, età di ogni founder, settore e angolo europeo provati; vedi
+  (Alto solo con fondazione, almeno un founder sotto 35 con età verificata, settore e angolo europeo provati; vedi
   `contracts/CLASSIFICATORI.md` e `src/classifiers/strict.js`);
 - nuovo segnale di domanda reale (clienti, pilot, contratti) ed estratti di testo per i modelli;
 - risolto il bug del regex `VCN` con caratteri di controllo al posto di `\b`;

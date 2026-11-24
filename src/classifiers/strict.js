@@ -4,7 +4,8 @@
 //     ancora costituita vale da quando i founder ci lavorano, se verificato da una fonte (per esempio il profilo
 //     LinkedIn controllato da una persona) ed entro max_anni_lavoro_non_costituita anni. Il valutatore lo scrive
 //     in `fondazione` come "non costituita, ci lavorano dal 2024 (fonte)";
-//  2. età di ogni founder verificata (registro imprese o fonte esplicita con nome) e sotto 35;
+//  2. almeno un founder con età verificata (registro imprese o fonte esplicita con nome) sotto 35 (dal 24 nov 2026;
+//     prima servivano tutti);
 //  3. settore deep tech provato (testo del sito con punteggio deep pieno);
 //  4. angolo europeo (luogo europeo sul sito o registro europeo);
 //  5. nessun criterio violato (questo lo controlla chi chiama: esclusioni e segnali di round).
@@ -12,7 +13,7 @@
 // Basso = almeno un criterio violato, o fuori target.
 // Lo usano l'euristico e il runner (guardia per ogni classificatore) e il riallineamento del foglio.
 import { CRITERIA as C } from '../lib/config.js';
-import { parseJson, founderCount } from '../signals/facts.js';
+import { parseJson } from '../signals/facts.js';
 
 export const DEEP_MIN = 6;
 
@@ -50,13 +51,11 @@ export function strictAlto(c, e = {}) {
   const foundedOk = ry ? inRange(ry) : workOk || (siteYear ? inRange(siteYear) && !oldCopyright : false);
   if (!foundedOk) manca.push(ry || siteYear || wy ? 'fondazione 2025-2026 o inizio lavori recente (fonte in conflitto)' : 'fondazione verificata (o inizio lavori, se non costituita)');
 
-  // 2. età di tutti i founder
+  // 2. almeno un founder sotto 35 con età verificata (Alex, 24 nov 2026: basta uno, non servono tutti)
   const siteAges = (ev.fa?.a || []).map(Number).filter(Number.isFinite);
-  const nFounders = Math.max(founderCount(c.founder_nomi), siteAges.length, 1);
   const maxes = [...vAges.map(a => +a.max), ...siteAges];
-  const covered = vAges.length + siteAges.length >= nFounders;
-  if (!maxes.length || !covered) manca.push('età verificata di ogni founder');
-  else if (Math.max(...maxes) > C.max_founder_age) manca.push(`founder sotto ${C.max_founder_age + 1} anni`);
+  if (!maxes.length) manca.push('età verificata di almeno un founder');
+  else if (Math.min(...maxes) > C.max_founder_age) manca.push(`almeno un founder sotto ${C.max_founder_age + 1} anni`);
 
   // 3. settore deep tech
   const score = (ev.deep || 0) - (ev.neg || 0);

@@ -35,7 +35,7 @@ ricontrollate con questa regola, sono scese a 2. L'età dei founder è il filtro
 
 | fit | regola |
 | --- | --- |
-| `Alto` | tutte e cinque le condizioni provate da una fonte, non dedotte. 1) fondazione 2025 o 2026 verificata (registro imprese o anno dichiarato sul sito; l'indizio del dominio non basta). Se la startup non è ancora costituita va bene lo stesso: conta da quando i founder ci lavorano, verificato da una fonte (per esempio il profilo LinkedIn controllato da una persona), entro 3 anni (`max_anni_lavoro_non_costituita` in `config/criteria.json`). Il valutatore lo scrive in `fondazione` come "non costituita, ci lavorano dal 2024 (fonte)". 2) età di ogni founder verificata (registro imprese con data di nascita o fonte esplicita con nome e cognome) e sotto 35. 3) settore deep tech provato (sito, grant o descrizione nel registro). 4) angolo europeo. 5) nessun criterio violato (round oltre 500k, VC, team oltre 5, grant oltre 1M) |
+| `Alto` | tutte e cinque le condizioni provate da una fonte, non dedotte. 1) fondazione 2025 o 2026 verificata (registro imprese o anno dichiarato sul sito; l'indizio del dominio non basta). Se la startup non è ancora costituita va bene lo stesso: conta da quando i founder ci lavorano, verificato da una fonte (per esempio il profilo LinkedIn controllato da una persona), entro 3 anni (`max_anni_lavoro_non_costituita` in `config/criteria.json`). Il valutatore lo scrive in `fondazione` come "non costituita, ci lavorano dal 2024 (fonte)". 2) almeno un founder con età verificata (registro imprese con data di nascita o fonte esplicita con nome e cognome) sotto 35: basta uno, non servono tutti (Alex, 24 novembre 2026). 3) settore deep tech provato (sito, grant o descrizione nel registro). 4) angolo europeo. 5) nessun criterio violato (round oltre 500k, VC, team oltre 5, grant oltre 1M) |
 | `Medio` | nessun criterio violato, ma fondazione, età o settore non ancora verificati |
 | `Basso` | almeno un criterio violato, oppure fuori target. Un esito `Esclusa` ha sempre fit `Basso` |
 
@@ -116,7 +116,7 @@ Una riga in `db_valutazioni`, chiave `id = dominio|classificatore`. Obbligatori:
 | `motivo` | perché, in una frase |
 | `fondazione`, `grant`, `investimenti`, `accesso_lab`, `team`, `eta_founder` | evidenza per ciascun criterio, con la fonte |
 | `under30` | `sì` solo se l'età di tutti i founder è verificata (dichiarata pubblicamente o da registro imprese) e sotto 30 |
-| `fit` | vedi il criterio severo: `Alto` solo con fondazione, età di ogni founder, settore e angolo europeo provati |
+| `fit` | vedi il criterio severo: `Alto` solo con fondazione, almeno un founder sotto 35 con età verificata, settore e angolo europeo provati |
 | `domanda_reale` | clienti, pilot, ricavi trovati |
 | `da_verificare` | cosa manca per qualificarla |
 | `fonti` | URL usati |

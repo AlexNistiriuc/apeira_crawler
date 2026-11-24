@@ -12,7 +12,7 @@ const NOT_VC = /(incubat|accelerat|universit|school|college|institut|lab\b|hub\b
 
 export default {
   name: 'euristico',
-  version: '1.2 (criterio severo)',
+  version: '1.3 (criterio severo, basta un founder sotto 35)',
 
   /** @param {object} c riga di db_candidati con c.ev = evidenze già parse */
   async classify(c) {
@@ -90,8 +90,13 @@ export default {
     const old = vAges.filter(a => a.min > C.max_founder_age);
     const nFounders = Math.max(founderCount(c.founder_nomi), ages.length);
     if (vAges.length) fonti.push(...vAges.map(a => a.url).filter(Boolean));
-    if (old.length) ex.push(`founder con ${C.max_founder_age + 1} anni o più (${old.map(a => `${a.nome}, ${a.min}${a.max !== a.min ? '-' + a.max : ''} anni, ${a.fonte}`).join('; ')})`);
-    if (ages.length && Math.max(...ages) > C.max_founder_age) ex.push(`founder con ${C.max_founder_age + 1}+ anni`);
+    // dal 24 nov 2026 basta un founder sotto 35: si esclude solo se TUTTI i founder hanno età nota e sono 35+
+    const known = [...vAges.map(a => +a.max), ...ages.map(Number)].filter(Number.isFinite);
+    const anyYoung = known.some(x => x <= C.max_founder_age);
+    const allKnown = vAges.length + ages.length >= Math.max(nFounders, 1);
+    if (!anyYoung && allKnown && known.length && known.every(x => x > C.max_founder_age)) {
+      ex.push(old.length ? `tutti i founder con ${C.max_founder_age + 1} anni o più (${old.map(a => `${a.nome}, ${a.min}${a.max !== a.min ? '-' + a.max : ''} anni, ${a.fonte}`).join('; ')})` : `tutti i founder con ${C.max_founder_age + 1}+ anni`);
+    }
     if (vAges.length || ages.length) {
       const parts = vAges.map(a => `${a.nome} ${a.min === a.max ? a.min : a.min + '-' + a.max} (${a.fonte})`);
       if (ages.length) parts.push('sul sito: ' + ages.join(', '));

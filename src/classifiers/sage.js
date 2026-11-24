@@ -34,8 +34,8 @@ const OUTCOME_OPTIONS = [
 ];
 
 const FIT_OPTIONS = [
-  { option: 'high', description: 'Only if all five are proven by a source, not inferred: founded in 2025 or 2026 (company registry or year stated on the site), or not yet incorporated with the founders working on it for at most 3 years, proven by a source; age of EVERY founder verified (registry or explicit public source) and under 35; deep-tech sector proven by the site, a grant or the registry description; European angle; no hard criterion violated.' },
-  { option: 'medium', description: 'No hard criterion violated, but founding year, the age of every founder or the deep-tech sector is not yet verified by a source.' },
+  { option: 'high', description: 'Only if all five are proven by a source, not inferred: founded in 2025 or 2026 (company registry or year stated on the site), or not yet incorporated with the founders working on it for at most 3 years, proven by a source; at least one founder with a verified age (registry or explicit public source) under 35; deep-tech sector proven by the site, a grant or the registry description; European angle; no hard criterion violated.' },
+  { option: 'medium', description: 'No hard criterion violated, but founding year, a verified founder age under 35 or the deep-tech sector is not yet proven by a source.' },
   { option: 'low', description: 'At least one hard criterion violated, or off-target: weakly deep-tech, non-European, too mature.' },
 ];
 
@@ -49,7 +49,7 @@ const GATE_OPTIONS = [
   { option: 'investment_over_500k', description: 'Public evidence shows more than US$500k of outside investment (equity, convertible, or a priced round such as seed or Series A).' },
   { option: 'grants_over_1m', description: 'Public evidence shows more than US$1M of grants in total.' },
   { option: 'team_over_5', description: 'Public evidence shows a team of more than five people.' },
-  { option: 'founder_over_34', description: 'A founder publicly states an age of 35 or more.' },
+  { option: 'founder_over_34', description: 'Every founder is 35 or older, by public sources (if at least one founder is under 35, do not pick this).' },
   { option: 'own_lab', description: 'Public evidence shows a company-owned lab or substantial established external lab access.' },
 ];
 const GATE_TO_TEXT = {
@@ -57,7 +57,7 @@ const GATE_TO_TEXT = {
   investment_over_500k: 'investimenti esterni oltre 500k USD',
   grants_over_1m: 'grant oltre 1M USD',
   team_over_5: 'team oltre 5 persone',
-  founder_over_34: 'founder con 35 anni o più',
+  founder_over_34: 'tutti i founder con 35 anni o più',
   own_lab: 'lab proprio o accesso a lab sostanziale',
 };
 

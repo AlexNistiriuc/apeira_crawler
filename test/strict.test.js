@@ -18,9 +18,13 @@ test('criterio severo: tutte le prove presenti, Alto', () => {
   assert.deepEqual(strictAlto(base), { ok: true, manca: [] });
 });
 
-test('criterio severo: età di un solo founder su due, niente Alto', () => {
-  const c = { ...base, eta_verificate: JSON.stringify([{ nome: 'Anna Rossi', min: 26, max: 27 }]) };
-  assert.deepEqual(strictAlto(c).manca, ['età verificata di ogni founder']);
+test('criterio severo: basta un founder sotto 35 con età verificata (dal 24 nov)', () => {
+  const one = { ...base, eta_verificate: JSON.stringify([{ nome: 'Anna Rossi', min: 26, max: 27 }]) };
+  assert.equal(strictAlto(one).ok, true, 'uno su due basta');
+  const mixed = { ...base, eta_verificate: JSON.stringify([{ nome: 'Anna Rossi', min: 26, max: 27 }, { nome: 'Old Boss', min: 52, max: 53 }]) };
+  assert.equal(strictAlto(mixed).ok, true, 'un founder giovane e uno anziano: va bene');
+  const old = { ...base, eta_verificate: JSON.stringify([{ nome: 'Old Boss', min: 52, max: 53 }]) };
+  assert.deepEqual(strictAlto(old).manca, ['almeno un founder sotto 35 anni']);
 });
 
 test('criterio severo: fondazione solo da indizio del dominio non basta', () => {
@@ -40,7 +44,7 @@ test('guardia comune: Alto senza prove diventa Medio, Esclusa diventa Basso', ()
   assert.equal(e.fit, 'Medio');
   assert.equal(e.esito, 'Needs verification');
   assert.ok(e.voto <= 69);
-  assert.match(e.motivo, /per Alto manca: età verificata di ogni founder/);
+  assert.match(e.motivo, /per Alto manca: età verificata di almeno un founder/);
   assert.equal(applyStrict({ esito: 'Esclusa', fit: 'Medio', voto: 0, motivo: 'x' }, base).fit, 'Basso');
   assert.equal(applyStrict({ esito: 'Needs verification', fit: 'Alto', voto: 80, motivo: 'x' }, base)._cambiata, undefined);
 });
@@ -50,7 +54,7 @@ test('euristico: Alto solo con le prove, senza età dei founder resta Medio', as
   assert.equal(ok.fit, 'Alto');
   const ko = await euristico.classify({ ...base, eta_verificate: '' });
   assert.equal(ko.fit, 'Medio');
-  assert.match(ko.motivo, /per Alto manca: età verificata di ogni founder/);
+  assert.match(ko.motivo, /per Alto manca: età verificata di almeno un founder/);
 });
 
 test('riallineamento: declassa gli Alto automatici senza prove, non tocca le righe claude', async () => {
@@ -89,4 +93,13 @@ test('criterio severo: non costituita, vale da quando ci lavorano se entro 3 ann
   assert.ok(!strictAlto(c, { fondazione: `non costituita, ci lavorano dal ${y - 5} (LinkedIn)` }).ok, 'oltre 3 anni no');
   assert.equal(strictAlto(base, { fondazione: 'non costituita, ci lavorano dal 2015' }).ok, true, 'col registro vale il registro');
   assert.equal(applyStrict({ esito: 'Needs verification', fit: 'Alto', voto: 80, motivo: 'x', fondazione: `non costituita, lavori dal ${y - 1} (profilo LinkedIn del CEO)` }, c).fit, 'Alto');
+});
+
+test('euristico: un founder sotto 35 e uno sopra non è un\'esclusione; tutti sopra 35 sì', async () => {
+  const mixed = { ...base, eta_verificate: JSON.stringify([{ nome: 'Anna Rossi', min: 26, max: 27, fonte: 'registro imprese UK' }, { nome: 'Marco Bianchi', min: 52, max: 53, fonte: 'registro imprese UK' }]) };
+  const r = await euristico.classify(mixed);
+  assert.notEqual(r.esito, 'Esclusa'); assert.equal(r.fit, 'Alto');
+  const old = { ...base, eta_verificate: JSON.stringify([{ nome: 'Anna Rossi', min: 48, max: 49, fonte: 'registro imprese UK' }, { nome: 'Marco Bianchi', min: 52, max: 53, fonte: 'registro imprese UK' }]) };
+  const o = await euristico.classify(old);
+  assert.equal(o.esito, 'Esclusa'); assert.match(o.motivo, /tutti i founder con 35 anni o più/);
 });

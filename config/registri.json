@@ -33,7 +33,7 @@
   "max_societa_per_giro": 250,
   "ricerche_sito_per_giro": 20,
   "_nota_memoria": "Ogni società letta si segna in db_scoperta (tipo registro): non si rilegge e la ricerca del sito non si ripaga.",
-  "_nota_ricerche": "Una ricerca ScrapeGraph per trovare il sito di una società senza sito nel registro, solo se tutti gli amministratori hanno meno di 35 anni. È l'unico costo in crediti.",
+  "_nota_ricerche": "Una ricerca ScrapeGraph per trovare il sito di una società senza sito nel registro, solo se almeno un amministratore ha meno di 35 anni (dal 24 nov 2026). È l'unico costo in crediti.",
   "_nota_nace": "Codici SN2025 (Norvegia, verificati il 23 nov 2026): 72.100 ricerca e sviluppo in scienze e ingegneria è quello che rende (Space Exploration Lab, Aligned Robotics, Rubedo). 71.129 e 62.100 troppo larghi.",
   "_nota_uk": "SIC: aerospazio 30300, elettronica 26110 26200 26511 26701 26400, batterie 27200, macchinari 28990, dispositivi medici 32500, ricerca 72110 72190, farmaci 21100 21200, armi 25400, veicoli 29100.",
   "francia_parole": [
