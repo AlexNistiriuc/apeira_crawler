@@ -1,0 +1,111 @@
+{
+  "_nota": "Scoperta da registro (23 nov 2026, dal report degli agenti di Tommaso): società costituite di recente con codici di attività deep tech, amministratori con data di nascita. Entrano in coda al crawler startup solo se hanno un sito e tutti gli amministratori hanno meno di 35 anni.",
+  "costituite_dal": "2025-01-01",
+  "norvegia_nace": [
+    "72.100",
+    "26.510",
+    "26.110",
+    "26.120",
+    "26.300",
+    "26.600",
+    "27.200",
+    "28.990",
+    "21.200"
+  ],
+  "uk_sic": [
+    "30300",
+    "26110",
+    "26200",
+    "26511",
+    "26701",
+    "27200",
+    "28990",
+    "32500",
+    "72110",
+    "72190",
+    "21100",
+    "21200",
+    "25400",
+    "29100",
+    "26400"
+  ],
+  "pagine_per_codice": 10,
+  "max_societa_per_giro": 250,
+  "ricerche_sito_per_giro": 20,
+  "_nota_memoria": "Ogni società letta si segna in db_scoperta (tipo registro): non si rilegge e la ricerca del sito non si ripaga.",
+  "_nota_ricerche": "Una ricerca ScrapeGraph per trovare il sito di una società senza sito nel registro, solo se tutti gli amministratori hanno meno di 35 anni. È l'unico costo in crediti.",
+  "_nota_nace": "Codici SN2025 (Norvegia, verificati il 23 nov 2026): 72.100 ricerca e sviluppo in scienze e ingegneria è quello che rende (Space Exploration Lab, Aligned Robotics, Rubedo). 71.129 e 62.100 troppo larghi.",
+  "_nota_uk": "SIC: aerospazio 30300, elettronica 26110 26200 26511 26701 26400, batterie 27200, macchinari 28990, dispositivi medici 32500, ricerca 72110 72190, farmaci 21100 21200, armi 25400, veicoli 29100.",
+  "francia_parole": [
+    "recherche et développement",
+    "quantique",
+    "robotique",
+    "spatial",
+    "semi-conducteurs",
+    "photonique",
+    "biotechnologie",
+    "dispositifs médicaux",
+    "drones",
+    "batteries",
+    "fusion nucléaire",
+    "intelligence artificielle embarquée"
+  ],
+  "francia_escludi": "formation|enseignement|coaching|conseil|consulting|immobili|restaura|coiffure|transport de|nettoyage|bâtiment|batiment|commerce de détail|vente en ligne|holding|location",
+  "_nota_francia": "Francia (23 nov 2026): BODACC (creazioni, senza chiave) per parola dell'attività, poi dirigenti con anno e mese di nascita da recherche-entreprises. Repubblica Ceca: ARES non filtra per data di costituzione e rifiuta oltre 1.000 risultati, quindi solo ricerca per nome nel crawler founder.",
+  "finlandia_codici": [
+    "72100",
+    "26110",
+    "26200",
+    "26510",
+    "26600",
+    "27200",
+    "28990",
+    "30300",
+    "21200",
+    "32500"
+  ],
+  "lettonia_parole_nome": "\\b(robot\\w*|robotic\\w*|quantum|space|aero\\w*|drone\\w*|photon\\w*|laser\\w*|semicond\\w*|chips?|fusion|nano\\w*|bio\\w*|medtech|dynamics|sensors?|optic\\w*|satellit\\w*|rocket\\w*|batter\\w*|hydrogen|materials?|deep ?tech|defen[cs]e|autonom\\w*|neuro\\w*|genom\\w*|cell|thera\\w*)\\b",
+  "_nota_altri_paesi": "Finlandia (PRH): data e attività ma niente età, entrano solo con il sito nel registro. Lettonia: età dal codice personale, niente attività, filtro sul nome, una volta al giorno. Esclusi per ora perché servono registrazione, pagamento o non c'è un'API aperta: Germania, Austria, Svizzera (Zefix richiede account), Paesi Bassi, Danimarca, Svezia, Irlanda, Spagna, Portogallo, Italia (report startup innovative dietro sessione), Polonia (KRS senza data di nascita e senza ricerca per data), Estonia (open data verificato il 24 nov: codici personali cifrati, data di nascita solo per il 4% delle persone, quindi niente età).",
+  "quota_per_paese": {
+    "NO": {
+      "societa": 50,
+      "ricerche_sito": 4
+    },
+    "UK": {
+      "societa": 70,
+      "ricerche_sito": 8
+    },
+    "FR": {
+      "societa": 60,
+      "ricerche_sito": 6
+    },
+    "LV": {
+      "societa": 40,
+      "ricerche_sito": 4
+    },
+    "FI": {
+      "societa": 40,
+      "ricerche_sito": 0
+    }
+  },
+  "_nota_quote": "24 nov 2026: senza quote il Regno Unito si prendeva tutto il budget e Francia, Lettonia e Finlandia non arrivavano mai. Ogni paese ha la sua quota di società lette e di ricerche del sito per giro.",
+  "belgio_nace": [
+    "72110",
+    "72190",
+    "72100",
+    "26110",
+    "26120",
+    "26200",
+    "26300",
+    "26510",
+    "26600",
+    "26700",
+    "27200",
+    "28990",
+    "30300",
+    "21100",
+    "21200",
+    "32500"
+  ],
+  "_nota_belgio": "Belgio (24 nov 2026): open data KBO con account gratuito (secret KBO_USER e KBO_PASSWORD), zip mensile, una volta al mese. Niente persone: entrano solo le imprese attive dal 2025 con codice NACE deep tech e sito nel registro, senza ricerche."
+}

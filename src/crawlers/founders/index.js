@@ -106,9 +106,9 @@ export async function run(n = 100, log = console.log, domini = []) {
     let news = null;
     const canSearch = search && (!onlyForced || c._forza);
     if (canSearch && !oldCompany) news = await fundingNews(c);
-    // 3. età dei founder (se il registro non le copre già e non le abbiamo già cercate). Prima si guarda nei
-    // risultati già scaricati; una ricerca per persona solo per le startup Alto (o chieste dal valutatore)
-    // quando lì non c'è niente.
+    // 3. età dei founder (se il registro non le copre già e non le abbiamo già cercate): si guarda solo nei
+    // risultati già scaricati. Dal 23 nov 2026 niente ricerche ScrapeGraph per persona: su 21 ricerche una notte
+    // ha dato 1 età verificata. L'età si prende dai registri (gratis). RICERCHE_PERSONA=1 le riaccende.
     const covered = n2 => verified.some(v => v.nome.toLowerCase().split(' ').pop() === n2.toLowerCase().split(' ').pop());
     const people = pickPeople(c.founder_nomi).filter(p => !covered(p.nome));
     // il vecchio crawler segnava "non identificati" chi non aveva CEO o CTO: ora si riprova con i founder elencati
@@ -120,7 +120,7 @@ export async function run(n = 100, log = console.log, domini = []) {
         for (const p of people) {
           st.persone++;
           let e = estimateAge(p.nome, news || []);
-          if (e.eta == null && (c._fit === 'Alto' || c._forza)) { st.ricerche_persona = (st.ricerche_persona || 0) + 1; e = estimateAge(p.nome, await webSearch(`"${p.nome}" ${companyName(c)}`)); }
+          if (e.eta == null && process.env.RICERCHE_PERSONA === '1' && (c._fit === 'Alto' || c._forza)) { st.ricerche_persona = (st.ricerche_persona || 0) + 1; e = estimateAge(p.nome, await webSearch(`"${p.nome}" ${companyName(c)}`)); }
           if (e.eta != null) st.stimate++;
           const v = verifiedFromEstimate(p, e);
           if (v) verified.push(v);

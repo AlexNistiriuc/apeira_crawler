@@ -5,6 +5,7 @@ import { structuredSearch, setSearchFetch, searchStats, resetSearchStats, provid
 const originalFetch = globalThis.fetch;
 
 beforeEach(() => {
+  process.env.SEARCH_PAUSA = '0';
   process.env.SCRAPEGRAPH_API_KEY = 'sg-test';
   resetSearchStats();
 });

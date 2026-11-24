@@ -69,6 +69,7 @@ function freshGas() {
 }
 
 beforeEach(() => {
+  process.env.SEARCH_PAUSA = '0';
   process.env.SCRAPEGRAPH_API_KEY = 'sg-test';
   process.env.SCRAPEGRAPH_MAX_FOUNDERS = '3';
   process.env.SCRAPEGRAPH_MAX_STARTUPS = '40';

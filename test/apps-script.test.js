@@ -140,3 +140,20 @@ test('coda solo_nuove: esclude le startup importate dalla v1', async () => {
   assert.deepEqual((await backend('queue', { classifier: 'sage', limit: 10, solo_nuove: true })).rows.map(r => r.dominio), ['nuova.ai']);
   assert.equal((await backend('queue', { classifier: 'sage', limit: 10 })).rows.length, 2, 'senza opzione: tutte');
 });
+
+test('stage senza lock in db_appoggio, poi merge nei tab veri; le righe sbagliate restano con il motivo', async () => {
+  const { ctx, token, backend, sheets } = loadGas();
+  const v = { id: 'a.ai|claude', dominio: 'a.ai', classificatore: 'claude', versione: 't', valutato_il: '2026-11-23 10:00:00', esito: 'Needs verification', fit: 'Medio', voto: 60, motivo: 'ok' };
+  let r = ctx.handle_({ token, action: 'stage', tab: 'db_valutazioni', key: 'id', rows: [v] }, false);
+  assert.equal(r.ok, true); assert.equal(r.staged, 1);
+  assert.equal(ctx.handle_({ token, action: 'stage', tab: 'db_hub', key: 'hub_id', rows: [{ hub_id: 'x' }] }, false).ok, false, 'solo valutazioni e candidati');
+  assert.equal(ctx.handle_({ token, action: 'stage', tab: 'db_valutazioni', key: 'id', rows: [{ ...v, fit: 'Altissimo' }] }, false).ok, false, 'formato controllato subito');
+  assert.equal((await backend('read', { tab: 'db_valutazioni' })).rows.length, 0, 'non ancora nel tab vero');
+  // una riga che passa il formato ma non l'upsert (chiave diversa da dominio|classificatore non arriva qui: simulo JSON rotto)
+  sheets.get('db_appoggio').appendRow(['2026-11-23', 'db_valutazioni', 'id', '{rotto', '']);
+  r = ctx.handle_({ token, action: 'merge' }, false);
+  assert.equal(r.unite, 1); assert.equal(r.errori, 1);
+  assert.equal((await backend('read', { tab: 'db_valutazioni' })).rows[0].fit, 'Medio');
+  const left = (await backend('read', { tab: 'db_appoggio' })).rows;
+  assert.equal(left.length, 1); assert.match(left[0].errore, /non JSON/);
+});

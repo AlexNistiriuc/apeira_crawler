@@ -10,7 +10,10 @@
  * Tutte le richieste: POST con corpo JSON {token, action, ...}.
  * Solo lettura anche via GET: ?token=...&action=queue&classifier=claude&limit=30&rank_by=euristico
  *
- * Azioni: read, upsert, append, queue, views, ping.
+ * Azioni: read, upsert, append, queue, views, ping, stage, merge.
+ * stage (23 nov 2026): per agenti e Claude. Mette le righe in db_appoggio senza il lock dei crawler (niente
+ * "Timeout di blocco"); merge, la vista oraria e ogni views le portano nei tab veri sotto lock.
+ * stage_ e mergeStaging_ stanno nel file Appoggio.gs dello stesso progetto.
  * Il foglio è il database: i tab db_* (nascosti) sono scritti dai programmi, Startup trovate è la vista per le persone
  * e per l'agente di outreach. Le sue prime 17 colonne sono quelle della v1, nello stesso ordine.
  */
@@ -56,7 +59,9 @@ function handle_(p, readOnly) {
     if (a === 'queue') return { ok: true, rows: queue_(p.classifier, Number(p.limit || 200), p.rank_by, p.solo_nuove) };
     if (a === 'upsert') return withLock_(function () { return upsert_(p.tab, p.key, p.rows || []); });
     if (a === 'append') return withLock_(function () { return append_(p.tab, p.rows || []); });
-    if (a === 'views') return withLock_(function () { return buildViews_(); });
+    if (a === 'views') return withLock_(function () { var m = mergeStaging_(); var v = buildViews_(); v.appoggio = m; return v; });
+    if (a === 'stage') return stage_(p.tab, p.key, p.rows || []);
+    if (a === 'merge') return withLock_(function () { return mergeStaging_(); });
     return { ok: false, error: 'azione sconosciuta: ' + a };
   } catch (err) {
     return { ok: false, error: String(err && err.message || err) };
@@ -302,7 +307,7 @@ function ageRank_(x) {
 }
 
 function buildViews() {
-  return withLock_(function () { return buildViews_(); });
+  return withLock_(function () { var m = mergeStaging_(); var v = buildViews_(); v.appoggio = m; return v; });
 }
 
 function buildViews_() {

@@ -9,6 +9,18 @@ const { run, candidates, pickQueries, looksLikePool, poolLinks } = await import(
 
 const empty = { tipo: {}, settore: {}, luogo: {}, coppia: {} };
 
+test('hub fuori tema o che non parla di startup: non si aggiunge', async () => {
+  const { offTopicHub, looksLikePool } = await import('../src/crawlers/discovery/index.js');
+  assert.match(offTopicHub('https://seosummit.hr/', 'Croatia SEO Summit 2027 | A conference'), /fuori tema/);
+  assert.match(offTopicHub('https://vnt.io/', 'Your product & engineering partner | vnt'), /fuori tema/);
+  assert.match(offTopicHub('https://www.massrobotics.org/x', 'AWS Robotics Startup Accelerator - MassRobotics'), /fuori Europa/);
+  assert.equal(offTopicHub('https://www.biopole.ch/x', 'Vanguard Accelerator', 'startups founders cohort'), '');
+  assert.equal(offTopicHub('https://x.eu/', 'Deep tech accelerator', 'startups founders cohort demo day'), '');
+  assert.equal(offTopicHub('https://x.eu/', 'Partners', 'our partners and clients, one startup'), 'non parla di startup');
+  const md = 'Our partners ' + Array.from({ length: 10 }, (_, i) => `[P${i}](https://p${i}.com/) teams`).join(' ');
+  assert.equal(looksLikePool('https://seo-expo.com/', md, 'SEO Expo').ok, false);
+});
+
 test('1. prima domande larghe (liste e tipo + paese), settore e città solo dove i pattern rendono', () => {
   const base = candidates(new Set(), empty);
   assert.ok(base.every(x => x.livello <= 1));
@@ -18,7 +30,7 @@ test('1. prima domande larghe (liste e tipo + paese), settore e città solo dove
   assert.ok(c2.some(x => x.livello === 2 && x.t === 'hackathon'));
   assert.ok(!c2.some(x => x.livello === 3), 'livello 3 solo per coppie tipo|settore che rendono');
   const s3 = { ...s2, coppia: { 'hackathon|quantum': { nuovi: 1, utili: 1 } } };
-  assert.ok(candidates(new Set(), s3).some(x => x.q === 'quantum hackathon Munich 2026'));
+  assert.ok(!candidates(new Set(), s3).some(x => x.livello === 3), 'livello 3 spento dal 23 nov (livello_massimo 2)');
   assert.ok(pickQueries(new Set(), s2, 3, () => 0.9).every(x => x.t === 'hackathon'));
 });
 
@@ -35,7 +47,7 @@ test('giro completo: una pagina-lista porta più hub; snowball dalle pagine part
   const gas = loadGas(); setSheetBackend(gas.backend);
   await upsert('db_hub', 'hub_id', [{ hub_id: 'old.eu', nome: 'Old', url: 'https://old.eu/', stato: 'attivo', candidati_da_valutare: '3' }]);
   const page = (title, body) => new Response(`<html><head><title>${title}</title></head><body>${body}<p>${'x '.repeat(400)}</p></body></html>`, { headers: { 'content-type': 'text/html' } });
-  const pool = name => page(`${name} finalists`, `<p>Our finalists, teams and startups</p>${Array.from({ length: 10 }, (_, i) => `<a href="https://${name}-team${i}.ai/">T${i}</a>`).join(' ')}`);
+  const pool = name => page(`${name} finalists`, `<p>Our startup finalists, teams and founders</p>${Array.from({ length: 10 }, (_, i) => `<a href="https://${name}-team${i}.ai/">T${i}</a>`).join(' ')}`);
   setFetch(async u => {
     u = String(u);
     if (u.includes('robots.txt')) return new Response('', { status: 404 });

@@ -45,6 +45,10 @@ export async function upsert(tab, key, rows, batch = 200) {
   return { inserted: ins, updated: upd };
 }
 
+/** Scrittura senza lock per agenti e Claude: va in db_appoggio e la unisce merge (o la vista oraria). */
+export async function stage(tab, key, rows) { return call('stage', { tab, key, rows }); }
+export async function merge() { return call('merge', {}); }
+
 export async function append(tab, rows) { return call('append', { tab, rows }); }
 
 /** Ricostruisce subito la vista Startup trovate (di solito lo fa Apps Script ogni ora). */

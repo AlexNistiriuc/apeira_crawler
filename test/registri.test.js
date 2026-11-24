@@ -1,0 +1,123 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { loadGas } from './gas-mock.js';
+import { setRegistryFetch, norwayLookup, czechLookup, registryCountry } from '../src/lib/registry.js';
+
+const year = new Date().getUTCFullYear();
+const roller = (people) => ({ rollegrupper: [{ type: { kode: 'STYR' }, roller: people.map(([kode, fn, en, born, extra = {}]) => ({ type: { kode, beskrivelse: kode }, person: { fodselsdato: born, navn: { fornavn: fn, etternavn: en } }, ...extra })) }] });
+
+test('registri: paese da dominio e testo', () => {
+  assert.equal(registryCountry({ dominio: 'nara.no' }), 'NO');
+  assert.equal(registryCountry({ dominio: 'x.ai', descrizione: 'Space startup in Prague' }), 'CZ');
+  assert.equal(registryCountry({ dominio: 'x.ai', hub_origine: 'NTNU Discovery' }), 'NO');
+});
+
+test('Norvegia: per nome, ruoli attivi con data di nascita, senza i dimessi', async () => {
+  setRegistryFetch(async url => {
+    url = String(url);
+    if (url.includes('/enheter?navn=')) return Response.json({ _embedded: { enheter: [{ organisasjonsnummer: '931000001', navn: 'NARA AS', stiftelsesdato: '2026-02-01', hjemmeside: 'www.nara.no' }] } });
+    if (url.endsWith('/enheter/931000001/roller')) return Response.json(roller([['DAGL', 'Ola', 'Nordmann', `${year - 28}-01-15`], ['MEDL', 'Kari', 'Hansen', `${year - 22}-12-01`], ['MEDL', 'Per', 'Old', '1960-01-01', { fratraadt: true }], ['REVI', 'Revisor', 'X', '1970-01-01']]));
+    return new Response('', { status: 404 });
+  });
+  const r = await norwayLookup('Nara');
+  assert.equal(r.paese, 'NO'); assert.equal(r.costituita, '2026-02-01');
+  assert.deepEqual(r.persone.map(p => p.nome), ['Ola Nordmann', 'Kari Hansen']);
+  assert.ok(r.persone.every(p => p.max <= 34));
+});
+
+test('Repubblica Ceca: ARES, organo statutario con data di nascita', async () => {
+  setRegistryFetch(async (url, opt) => {
+    url = String(url);
+    if (url.endsWith('/ekonomicke-subjekty/vyhledat')) { assert.equal(JSON.parse(opt.body).obchodniJmeno, 'Malnus'); return Response.json({ ekonomickeSubjekty: [{ ico: '12345678', obchodniJmeno: 'Malnus s.r.o.', datumVzniku: '2025-05-02' }] }); }
+    if (url.endsWith('/ekonomicke-subjekty-vr/12345678')) return Response.json({ zaznamy: [{ primarniZaznam: true, statutarniOrgany: [{ nazevOrganu: 'Statutární orgán', clenoveOrganu: [{ fyzickaOsoba: { jmeno: 'JAN', prijmeni: 'NOVÁK', datumNarozeni: `${year - 25}-03-10` } }, { fyzickaOsoba: { jmeno: 'Old', prijmeni: 'Gone', datumNarozeni: '1950-01-01' }, datumVymazu: '2025-09-01' }] }] }] });
+    return new Response('', { status: 404 });
+  });
+  const r = await czechLookup('Malnus');
+  assert.equal(r.paese, 'CZ'); assert.equal(r.costituita, '2025-05-02');
+  assert.deepEqual(r.persone.map(p => p.nome), ['Jan Novák']);
+});
+
+test('scoperta da registro: solo società giovani con sito, segnate per non rileggerle né ripagare la ricerca', async () => {
+  const gas = loadGas();
+  const { setSheetBackend, read } = await import('../src/lib/sheet.js');
+  setSheetBackend(gas.backend);
+  delete process.env.SCRAPEGRAPH_API_KEY; delete process.env.SEARCH_API_KEY; delete process.env.COMPANIES_HOUSE_KEY;
+  setRegistryFetch(async url => {
+    url = String(url);
+    if (url.includes('naeringskode=72.100') && url.includes('page=0')) return Response.json({ _embedded: { enheter: [
+      { organisasjonsnummer: '1', navn: 'Young Labs AS', registreringsdatoEnhetsregisteret: '2025-06-01', hjemmeside: 'younglabs.no' },
+      { organisasjonsnummer: '2', navn: 'Old Boys AS', registreringsdatoEnhetsregisteret: '2025-06-01', hjemmeside: 'oldboys.no' },
+      { organisasjonsnummer: '3', navn: 'Nosite AS', registreringsdatoEnhetsregisteret: '2025-06-01' }] }, page: { totalPages: 1 } });
+    if (url.includes('naeringskode=')) return Response.json({ _embedded: { enheter: [] }, page: { totalPages: 0 } });
+    if (url.endsWith('/enheter/1/roller')) return Response.json(roller([['DAGL', 'Ola', 'Ung', `${year - 24}-01-01`]]));
+    if (url.endsWith('/enheter/2/roller')) return Response.json(roller([['DAGL', 'Per', 'Gammel', `${year - 50}-01-01`]]));
+    if (url.endsWith('/enheter/3/roller')) return Response.json(roller([['DAGL', 'Liv', 'Ung', `${year - 26}-01-01`]]));
+    return new Response('', { status: 404 });
+  });
+  const { run } = await import('../src/crawlers/registri/index.js');
+  const st = await run({ log: () => {} });
+  assert.equal(st.societa_lette, 3); assert.equal(st.giovani, 2); assert.equal(st.nuove_in_coda, 1);
+  const c = (await read('db_candidati')).find(x => x.dominio === 'younglabs.no');
+  assert.equal(c.stato_crawler, 'da_ricontrollare');
+  assert.equal(JSON.parse(c.eta_verificate)[0].fonte, 'registro imprese NO');
+  assert.equal(JSON.parse(c.registro).costituita, '2025-06-01');
+  assert.equal((await read('db_scoperta')).filter(r => r.tipo === 'registro' && !/giorno/.test(r.query)).length, 3, 'tutte e tre segnate');
+  const again = await run({ log: () => {} });
+  assert.equal(again.societa_lette, 0, 'al giro dopo non si rileggono');
+});
+
+test('Francia: creazioni dal BODACC e dirigenti con anno e mese di nascita', async () => {
+  const { franceSearch, francePeople } = await import('../src/lib/registry.js');
+  setRegistryFetch(async url => {
+    url = String(url);
+    if (url.includes('bodacc')) {
+      assert.match(decodeURIComponent(url), /familleavis="creation" and dateparution>="2025-01-01" and search\("quantique"\)/);
+      return Response.json({ total_count: 1, results: [{ dateparution: '2025-09-01', commercant: 'QUBITIX', registre: ['912345678', '912 345 678'], listeetablissements: JSON.stringify({ etablissement: { activite: 'recherche et développement en informatique quantique' } }) }] });
+    }
+    if (url.includes('recherche-entreprises')) return Response.json({ results: [{ siren: '912345678', dirigeants: [{ nom: 'MARTIN', prenoms: 'Lea', date_de_naissance: `${year - 26}-04`, qualite: 'Président', type_dirigeant: 'personne physique' }] }] });
+    return new Response('', { status: 404 });
+  });
+  const { items } = await franceSearch('quantique', '2025-01-01');
+  assert.deepEqual(items.map(x => [x.numero, x.nome, x.costituita]), [['912345678', 'QUBITIX', '2025-09-01']]);
+  assert.match(items[0].attivita, /quantique/);
+  const p = await francePeople('912345678');
+  assert.equal(p[0].nome, 'Lea Martin'); assert.ok(p[0].max <= 27);
+});
+
+test('Francia: gli imprenditori individuali (COGNOME, Nome) non sono società', async () => {
+  const { franceSearch } = await import('../src/lib/registry.js');
+  setRegistryFetch(async () => Response.json({ total_count: 2, results: [
+    { dateparution: '2025-09-01', commercant: 'GAUBE, Alexia Aurelie', registre: ['912345671'] },
+    { dateparution: '2025-09-01', commercant: 'POPN\'DRIVE', registre: ['912345672'] }] }));
+  assert.deepEqual((await franceSearch('robotique', '2025-01-01')).items.map(x => x.nome), ["POPN'DRIVE"]);
+});
+
+test('Lettonia: età dal codice personale mascherato, filtro sul nome, solo SIA e AS attive', async () => {
+  const { latviaAge } = await import('../src/lib/registry.js');
+  const { latviaCompanies, splitCsv } = await import('../src/crawlers/registri/lettonia.js');
+  const today = new Date(Date.UTC(2026, 10, 23));
+  assert.deepEqual(latviaAge('140797-*****', '', today), { min: 29, max: 29 });
+  assert.deepEqual(latviaAge('010203-*****', '', today), { min: 23, max: 23 });
+  assert.equal(latviaAge('321234-*****', '', today), null, 'codice nuovo senza data');
+  assert.deepEqual(splitCsv('1;"A ""B"" C";x'), ['1', 'A "B" C', 'x']);
+  const reg = 'regcode;name;name_in_quotes;type;registered;terminated;closed\n40200000001;"SIA ""Orbit Robotics""";Orbit Robotics;SIA;2025-05-02;; \n40200000002;"SIA ""Maizes Ceptuve""";Maizes Ceptuve;SIA;2025-05-02;;\n40200000003;"SIA ""Old Tech""";Old Tech;SIA;2019-01-01;;\n';
+  const off = 'at_legal_entity_registration_number;entity_type;position;governing_body;name;latvian_identity_number_masked;birth_date\n40200000001;NATURAL_PERSON;BOARD_MEMBER;EXECUTIVE_BOARD;Janis Berzins;140797-*****;\n';
+  const f = async url => new Response(String(url).includes('officers') ? off : reg);
+  const list = await latviaCompanies('2025-01-01', /robot|tech/i, f);
+  assert.deepEqual(list.map(x => x.nome), ['Orbit Robotics']);
+  assert.equal(list[0].persone[0].nome, 'Janis Berzins'); assert.ok(list[0].persone[0].max <= 30);
+});
+
+test('Belgio: dai CSV del KBO alle imprese attive dal 2025 con NACE deep tech e sito', async () => {
+  const { belgiumFromCsv, splitComma, isoDate } = await import('../src/crawlers/registri/belgio.js');
+  assert.deepEqual(splitComma('"0712.345.678","A, B",x'), ['0712.345.678', 'A, B', 'x']);
+  assert.equal(isoDate('03-02-2025'), '2025-02-03');
+  const lines = arr => () => (async function* () { for (const l of arr) yield l; })();
+  const items = await belgiumFromCsv({
+    enterprise: lines(['"EnterpriseNumber","Status","JuridicalSituation","TypeOfEnterprise","JuridicalForm","JuridicalFormCAC","StartDate"', '"1001.001.001","AC","000","2","610","","03-02-2025"', '"1001.001.002","AC","000","2","610","","03-02-2019"', '"1001.001.003","AC","000","2","610","","01-06-2025"']),
+    activity: lines(['"EntityNumber","ActivityGroup","NaceVersion","NaceCode","Classification"', '"1001.001.001","001","2008","72190","MAIN"', '"1001.001.002","001","2008","72190","MAIN"', '"1001.001.003","001","2008","56101","MAIN"']),
+    denomination: lines(['"EntityNumber","Language","TypeOfDenomination","Denomination"', '"1001.001.001","2","001","Qubit Labs"']),
+    contact: lines(['"EntityNumber","EntityContact","ContactType","Value"', '"1001.001.001","ENT","WEB","www.qubitlabs.be"']),
+  }, { from: '2025-01-01', codes: ['72190'] });
+  assert.deepEqual(items.map(x => [x.nome, x.costituita, x.sito]), [['Qubit Labs', '2025-02-03', 'www.qubitlabs.be']]);
+});

@@ -38,7 +38,10 @@ let impl = (...a) => fetch(...a);
 /** Solo per i test. */
 export function setSearchFetch(fn) { impl = fn; }
 
-export const provider = () => (process.env.SCRAPEGRAPH_API_KEY ? 'scrapegraph' : process.env.SEARCH_API_KEY ? 'brave' : '');
+import { readFileSync as _rf } from 'node:fs';
+// Pausa dei crediti (config/crediti.json, decisa da Alex): nessuna ricerca web finché è true. SEARCH_PAUSA=0 la ignora (test).
+export const creditsPaused = () => { if (process.env.SEARCH_PAUSA === '0') return false; try { return JSON.parse(_rf(new URL('../../config/crediti.json', import.meta.url), 'utf8')).pausa === true; } catch { return false; } };
+export const provider = () => (creditsPaused() ? '' : process.env.SCRAPEGRAPH_API_KEY ? 'scrapegraph' : process.env.SEARCH_API_KEY ? 'brave' : '');
 export const searchEnabled = () => Boolean(provider());
 const SG_ENDPOINT = process.env.SCRAPEGRAPH_ENDPOINT || 'https://v2-api.scrapegraphai.com/api/search';
 const SG_RESULTS = Number(process.env.SCRAPEGRAPH_RESULTS || 5);
@@ -90,6 +93,7 @@ async function sgSearch(q, count) {
  * @returns {Promise<{json: object|null, results: Array<{title:string,url:string,snippet:string}>}>}
  */
 export async function structuredSearch(q, { numResults = 5, prompt, schema, timeout = 90000 } = {}) {
+  if (creditsPaused()) { searchStats.saltate_pausa = (searchStats.saltate_pausa || 0) + 1; return { json: null, results: [] }; }
   if (provider() !== 'scrapegraph') return { json: null, results: [] };
   if (sgOut) { searchStats.saltate_tetto++; throw Object.assign(new Error('crediti ScrapeGraph finiti'), { skip: true }); }
   if (searchStats.ricerche >= MAX_PER_RUN) { searchStats.saltate_tetto++; throw Object.assign(new Error('tetto ricerche per giro raggiunto'), { skip: true }); }
@@ -126,6 +130,7 @@ export async function structuredSearch(q, { numResults = 5, prompt, schema, time
 
 /** @returns {Promise<Array<{title:string,url:string,snippet:string}>>} */
 export async function webSearch(q, { count = 8 } = {}) {
+  if (creditsPaused()) { searchStats.saltate_pausa = (searchStats.saltate_pausa || 0) + 1; return []; }
   if (provider() === 'scrapegraph') {
     if (searchStats.ricerche >= MAX_PER_RUN) { searchStats.saltate_tetto++; return []; }
     return sgSearch(q, count);

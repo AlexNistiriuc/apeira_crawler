@@ -22,9 +22,10 @@ scrivono, ognuno solo nelle sue colonne:
 
 | pezzo | cosa fa | quando gira |
 | --- | --- | --- |
-| crawler hub | aggiunge pool: semi, reti di incubatori (EBN, UKSPA), snowball dai siti delle startup | GitHub Actions, alla fine di ogni giro del crawler startup |
+| crawler hub | aggiunge pool: semi, reti di incubatori (EBN, UKSPA), snowball dai siti delle startup; poi scoperta con ricerche web e scoperta da registro | GitHub Actions, a catena |
+| scoperta da registro | società costituite dal 2025 con attività deep tech e tutti gli amministratori sotto 35 anni (Norvegia per codice NACE, Regno Unito per codice SIC, Francia per parole dell'attività nel BODACC, Lettonia per nome dall'open data una volta al giorno): entrano in coda con età verificate. Finlandia (PRH) per codice di attività e Belgio (open data KBO, con account: secret KBO_USER e KBO_PASSWORD, una volta al mese), senza età: entrano solo con il sito scritto nel registro. Gli hub fuori Europa (Stati Uniti, Canada, Asia...) non si aggiungono e non si leggono. Gli altri paesi europei non hanno un registro aperto con data di nascita o ricerca per data: vedi `_nota_altri_paesi` in `config/registri.json` | nel giro del crawler hub |
 | crawler startup | legge i pool, trova i siti delle startup, controlla età, funding, settore, team, contatti, salva le evidenze | GitHub Actions, a catena senza sosta (giri da ~45 minuti) |
-| crawler LinkedIn | per le startup Alto/Medio chiama ScrapeGraph e ricava dipendenti, anno di fondazione, data di inizio dei founder ed età stimata dalla prima esperienza educativa; scrive `linkedin_dati`, `linkedin_fonti`, `linkedin_il` (le colonne del crawler founder restano separate) | dentro ogni classificazione (black box `ensureLinkedin`) e con `npm run linkedin` / workflow `crawler LinkedIn` |
+| crawler LinkedIn | per le startup Alto/Medio chiama ScrapeGraph (in pausa se `config/crediti.json` ha `pausa: true`) e ricava dipendenti, anno di fondazione, data di inizio dei founder ed età stimata dalla prima esperienza educativa; scrive `linkedin_dati`, `linkedin_fonti`, `linkedin_il` (le colonne del crawler founder restano separate) | dentro ogni classificazione (black box `ensureLinkedin`) e con `npm run linkedin` / workflow `crawler LinkedIn` |
 | classificatore euristico | i criteri rigidi della v1, come base di confronto | subito dopo ogni giro del crawler startup |
 | classificatore Sage | decide esito, fit e voto dopo l'euristico; completo (ricerca web + reasoning) per Fit Alto/Medio, leggero per Fit Basso | GitHub Actions, dopo ogni giro del crawler e a catena finché la coda non è vuota |
 | Claude con la skill | verifica manuale delle fonti e fallback | su richiesta |
@@ -37,9 +38,10 @@ In **Startup trovate** entrano le startup valutate da uno dei valutatori elencat
 `VISTA_RICHIEDE` (es. `sage,claude`: basta uno dei due). Se dopo la valutazione l'euristico le esclude per fatti
 nuovi (registro imprese, età verificate, notizie di round), escono subito.
 
-**Crawler founder** (`npm run founders`, dopo l'euristico): per le startup migliori raccoglie una volta sola
-registro imprese (Francia gratis; Regno Unito con il secret `COMPANIES_HOUSE_KEY`, chiave gratuita di Companies House),
-età dei founder e notizie di funding. Le età da registro o dichiarate con nome e cognome sono verificate e possono
+**Crawler founder** (`npm run founders`, dopo l'euristico): per le startup Medio e Alto raccoglie una volta sola
+registro imprese (Francia, Norvegia e Repubblica Ceca gratis; Regno Unito con il secret `COMPANIES_HOUSE_KEY`,
+chiave gratuita di Companies House) e una ricerca ScrapeGraph su round e founder. Dal 23 novembre 2026 niente
+ricerche per persona (rendevano 1 età su 21 ricerche; `RICERCHE_PERSONA=1` le riaccende): l'età si prende dai registri. Le età da registro o dichiarate con nome e cognome sono verificate e possono
 escludere (35 anni o più); le stime ordinano soltanto. Le notizie salvate le riusano Sage e Claude senza nuove ricerche.
 Portfolio VC: nota e penalità, non esclusione.
 
@@ -47,6 +49,25 @@ Portfolio VC: nota e penalità, non esclusione.
 `SCOUTING_ATTIVO` con valore `no`. I giri in corso finiscono, i successivi non partono. Per ripartire cancellala.
 
 I consumi di Sage di ogni giro sono in `db_log` (statistiche.consumo: chiamate, token, ricerche web, giri completi e leggeri).
+
+## Ottimizzazioni del 23 novembre 2026
+
+Dopo una notte in cui l'87% dei crediti ScrapeGraph era andato alla scoperta di hub, con pochi risultati:
+- scoperta: niente più query di livello 3 (settore + tipo + città + anno; `livello_massimo` in `config/discovery.json`);
+  gli hub fuori tema (SEO, marketing, agenzie, software house, eventi d'altro tipo) o che non parlano di startup non si
+  aggiungono, e quelli già nel foglio passano a `senza_resa` senza leggerli (`HUB_OFFTOPIC` in `src/signals/patterns.js`);
+- prefiltro: scuole estive, centri e gruppi di ricerca, progetti con work package e consorzi, siti personali si
+  scartano come "non è una startup" (`NOSTART`, `NOSTART_DOM`);
+- crawler founder: una ricerca per startup, niente ricerche per persona;
+- registri con data di nascita: Norvegia (Brønnøysund) e Repubblica Ceca (ARES) oltre a Francia e Regno Unito, e la
+  scoperta da registro (`npm run registri`, `config/registri.json`). Ogni società letta si segna in `db_scoperta`
+  (tipo `registro`) per non rileggerla né ripagare la ricerca del suo sito. Prova delle API: workflow "prova registri";
+- lettura del sito: sitemap per i siti in JavaScript o senza link nel testo, la lingua del sito non si salta più, si
+  seguono i redirect a un altro dominio; se le pagine lette sono zero, `evidenze.sito.motivo_zero` dice perché;
+- scritture di agenti e Claude: azione `stage` in `db_appoggio`, senza il lock dei crawler; `merge`, `views` e la vista
+  oraria le portano nei tab veri. Richiede il nuovo `apps-script/Code.gs` e `apps-script/Appoggio.gs`
+  incollati e ridistribuiti.
+- criterio severo per il fit Alto (vedi `contracts/CLASSIFICATORI.md`).
 
 ## Struttura
 
@@ -56,7 +77,8 @@ config/sources.json          semi, reti di incubatori, directory
 config/blocked-domains.js    domini che non sono mai startup
 contracts/schema.json        colonne e valori ammessi di ogni tab
 contracts/CLASSIFICATORI.md  come si attacca un classificatore
-apps-script/Code.gs          web app che trasforma il foglio in database (read, upsert, queue, vista)
+apps-script/Code.gs          web app che trasforma il foglio in database (read, upsert, queue, stage, merge, vista)
+apps-script/Appoggio.gs      scheda di appoggio per gli stage di agenti e Claude (usata da Code.gs)
 src/lib/                     rete (diretta + Jina, robots.txt), HTML, foglio, configurazione
 src/lib/search.js            ricerca web (ScrapeGraph v2 o Brave) e ricerca strutturata per il crawler LinkedIn
 src/signals/                 euristiche pure: settori, funding, età, team, evidenze, prefiltro
@@ -65,16 +87,21 @@ src/signals/age.linkedin.js  età dalla prima esperienza educativa e anzianità 
 src/crawlers/hubs/           crawler degli hub
 src/crawlers/startups/       crawler delle startup (scoperta, directory, controllo, riga)
 src/crawlers/linkedin/       crawler LinkedIn (black box `ensureLinkedin` per gli evaluator)
+src/crawlers/registri/       scoperta da registro (Norvegia, Regno Unito con la chiave)
+config/registri.json         codici di attività e limiti della scoperta da registro
 src/classifiers/             runner, contratto di uscita, classificatori euristico e Sage
 skill/                       skill di Claude per verifiche manuali e controllo salute
 tools/migrate-from-chrome.js porta nel foglio i dati della v1 rimasti in Chrome
+tools/export-recenti.js      esporta in sola lettura le startup da valutare recenti (workflow "esporta startup recenti")
+tools/prova-registri.js      prova in sola lettura le API dei registri (workflow "prova registri")
 test/                        test senza rete: euristiche, Code.gs su finto Sheets, pipeline completa
 ```
 
 ## Installazione
 
 1. **Foglio.** Nel foglio `pool_founder_startup`: Estensioni > Apps Script, incolla
-   `apps-script/Code.gs`, salva, esegui `setup()`. Crea i tab `db_hub`, `db_candidati`,
+   `apps-script/Code.gs` e `apps-script/Appoggio.gs` (due file dello stesso progetto), salva, esegui
+   `setup()`. Crea i tab `db_hub`, `db_candidati`,
    `db_valutazioni`, `db_log` (nascosti), prepara `Startup trovate`, nasconde i tab della v1 e scrive il token nel
    log di esecuzione. Poi Esegui il deployment > Nuovo deployment > App web, esegui come te,
    accesso "Chiunque". L'URL che finisce con `/exec` e il token servono a tutto il resto.

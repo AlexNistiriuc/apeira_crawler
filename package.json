@@ -12,10 +12,11 @@
     "startups": "node src/crawlers/startups/index.js",
     "classify": "node src/classifiers/run.js",
     "realign": "node src/classifiers/realign.js",
-    "test": "node --test test/*.test.js",
+    "test": "SEARCH_PAUSA=0 node --test test/*.test.js",
     "founders": "node src/crawlers/founders/index.js",
     "linkedin": "node src/crawlers/linkedin/index.js",
-    "discovery": "node src/crawlers/discovery/index.js"
+    "discovery": "node src/crawlers/discovery/index.js",
+    "registri": "node src/crawlers/registri/index.js"
   },
   "dependencies": {
     "cheerio": "1.0.0"

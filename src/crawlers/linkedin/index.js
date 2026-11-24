@@ -15,7 +15,7 @@
 // crawler founder (eta_stimata, fonti_eta, eta_il) restano intatte.
 import { read, upsert, logRun, TABS } from '../../lib/sheet.js';
 import { now, today } from '../../lib/config.js';
-import { provider, structuredSearch, searchStats, resetSearchStats } from '../../lib/search.js';
+import { provider, creditsPaused, structuredSearch, searchStats, resetSearchStats } from '../../lib/search.js';
 import { pickPeople } from '../../signals/facts.js';
 import { pickBest } from '../founders/index.js';
 import { ageFromEducation, earliestStart, startYear, tenureText, band, parseYear } from '../../signals/age.linkedin.js';
@@ -275,6 +275,10 @@ export async function ensureLinkedin(c, { fit, force = false, write = true, year
       }
     }
   }
+  if (creditsPaused()) {
+    linkedinStats.non_disponibili++;
+    return unavailable('crediti ScrapeGraph in pausa (config/crediti.json)');
+  }
   if (provider() !== 'scrapegraph') {
     linkedinStats.non_disponibili++;
     return unavailable('SCRAPEGRAPH_API_KEY mancante');
@@ -320,6 +324,12 @@ export async function run(n = 100, log = console.log) {
   resetLinkedinStats();
   resetSearchStats();
   const st = { candidate: 0, disponibili: 0, cache: 0, non_disponibili: 0, saltati_fit: 0, errori: 0, founder: 0, dipendenti: 0 };
+  if (creditsPaused()) {
+    log('crediti ScrapeGraph in pausa (config/crediti.json): crawler LinkedIn saltato');
+    st.saltato = 'crediti ScrapeGraph in pausa';
+    await logRun('crawler linkedin', startedAt, st);
+    return st;
+  }
   if (provider() !== 'scrapegraph') {
     log('SCRAPEGRAPH_API_KEY mancante: crawler LinkedIn saltato');
     st.saltato = 'manca SCRAPEGRAPH_API_KEY';

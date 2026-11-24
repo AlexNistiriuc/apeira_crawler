@@ -1,0 +1,21 @@
+name: aggiungi hub
+on:
+  workflow_dispatch:
+    inputs:
+      urls: { description: 'URL degli hub, separati da virgola', required: true }
+      nomi: { description: 'nomi, separati da virgola (facoltativo)', default: '' }
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: node tools/aggiungi-hub.js
+        env:
+          SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
+          SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
+          HUB_URLS: ${{ inputs.urls }}
+          HUB_NOMI: ${{ inputs.nomi }}
