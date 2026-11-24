@@ -3,14 +3,10 @@ on: workflow_dispatch
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
     steps:
-      - name: Estonia, quante persone hanno la data di nascita
+      - name: Belgio, form di login KBO open data
         run: |
-          B=https://avaandmed.ariregister.rik.ee/sites/default/files/avaandmed
-          curl -sSL -o p.zip "$B/ettevotja_rekvisiidid__kaardile_kantud_isikud.json.zip"
-          unzip -p p.zip | head -c 300000000 > p.json || true
-          echo "isiku_tyyp F (persona fisica):"; grep -c '"isiku_tyyp":"F"' p.json || true
-          echo "synniaeg non null:"; grep -cE '"synniaeg":"[0-9]' p.json || true
-          echo "campi con kood:"; grep -oE '"[a-z_]*kood[a-z_]*":' p.json | sort | uniq -c | sort -rn | head
-          echo "esempio campo isikukood:"; grep -oE '"isikukood[a-z_]*":"?[^,]{0,14}' p.json | head -3 | sed -E 's/[0-9]{6}/******/'
+          curl -sSL -c c.txt "https://kbopub.economie.fgov.be/kbo-open-data/login?lang=en" | grep -iE '<form|<input|action=' | sed -E 's/value="[^"]{20,}"/value="..."/g' | head -20
+          echo "---files"
+          curl -sSL -b c.txt "https://kbopub.economie.fgov.be/kbo-open-data/affiliation/xml/?files" -o f.html -w "%{http_code} %{url_effective}\n"; grep -oiE 'href="[^"]+"' f.html | head -15
