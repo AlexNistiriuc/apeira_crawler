@@ -5,8 +5,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Belgio, form di login KBO open data
+      - name: Belgio, login KBO open data e lista dei file (solo nomi)
+        env:
+          KBO_USER: ${{ secrets.KBO_USER }}
+          KBO_PASSWORD: ${{ secrets.KBO_PASSWORD }}
         run: |
-          curl -sSL -c c.txt "https://kbopub.economie.fgov.be/kbo-open-data/login?lang=en" | grep -iE '<form|<input|action=' | sed -E 's/value="[^"]{20,}"/value="..."/g' | head -20
-          echo "---files"
-          curl -sSL -b c.txt "https://kbopub.economie.fgov.be/kbo-open-data/affiliation/xml/?files" -o f.html -w "%{http_code} %{url_effective}\n"; grep -oiE 'href="[^"]+"' f.html | head -15
+          echo "secret presenti: user=$([ -n "$KBO_USER" ] && echo sì || echo no) password=$([ -n "$KBO_PASSWORD" ] && echo sì || echo no)"
+          B=https://kbopub.economie.fgov.be/kbo-open-data
+          curl -sSL -c c.txt -b c.txt "$B/login?lang=en" -o l.html
+          A=$(grep -oE '<form[^>]*action="[^"]+"' l.html | head -1 | grep -oE 'action="[^"]+"' | cut -d'"' -f2); echo "action: $A"
+          curl -sSL -c c.txt -b c.txt -o after.html -w "login %{http_code} %{url_effective}\n" --data-urlencode "j_username=$KBO_USER" --data-urlencode "j_password=$KBO_PASSWORD" "https://kbopub.economie.fgov.be$A"
+          grep -oiE '(bad credentials|invalid|incorrect|error)[^<]{0,80}' after.html | head -3
+          grep -oE 'href="[^"]+"' after.html | grep -viE 'resources|belgium.be|economie.fgov|lang=' | head -15
+          curl -sSL -c c.txt -b c.txt "$B/affiliation/xml/?files" -o f.html -w "files %{http_code} %{url_effective}\n"
+          grep -oE 'KboOpenData_[0-9]+_[0-9]{4}_[0-9]{2}_[A-Za-z]+\.zip' f.html after.html | sort -u | tail -6
