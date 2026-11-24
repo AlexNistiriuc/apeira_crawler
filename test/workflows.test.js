@@ -10,7 +10,7 @@ test('crawler LinkedIn esiste e i classificatori ricevono SCRAPEGRAPH_API_KEY', 
   const linkedin = text('crawl-linkedin.yml');
   assert.match(linkedin, /npm run linkedin/);
   assert.match(linkedin, /SCRAPEGRAPH_API_KEY/);
-  assert.match(linkedin, /SCRAPEGRAPH_MAX_PER_RUN/);
+  assert.match(linkedin, /SEARCH_MAX_PER_RUN/);
   for (const file of ['crawl-startups.yml', 'classify-sage.yml', 'classify.yml']) {
     const workflow = text(file);
     assert.match(workflow, /SCRAPEGRAPH_API_KEY/, `${file}: manca la chiave ScrapeGraph`);

@@ -32,7 +32,26 @@ jobs:
           SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
           SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
           SCRAPEGRAPH_API_KEY: ${{ secrets.SCRAPEGRAPH_API_KEY }}
-          SCRAPEGRAPH_MAX_PER_RUN: '120'
+          SCRAPEGRAPH_CACHE_DAYS: '30'
+          SCRAPEGRAPH_MAX_FOUNDERS: '3'
+      # fatti su età founder e fase (registri, Brave) PRIMA dei valutatori: così valutano una volta sola, con tutti i fatti
+      - if: always() && steps.crawl.outcome == 'success'
+        run: npm run founders -- 40
+        env:
+          SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
+          SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
+          SEARCH_API_KEY: ${{ secrets.SEARCH_API_KEY }}
+          SCRAPEGRAPH_API_KEY: ${{ secrets.SCRAPEGRAPH_API_KEY }}
+          COMPANIES_HOUSE_KEY: ${{ secrets.COMPANIES_HOUSE_KEY }}
+      # l'euristico ripassa solo le startup con fatti nuovi (il crawler founder ha aggiornato ultimo_check)
+      - if: always() && steps.crawl.outcome == 'success'
+        run: npm run classify -- euristico 3000
+        env:
+          SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
+          SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
+          SCRAPEGRAPH_API_KEY: ${{ secrets.SCRAPEGRAPH_API_KEY }}
+          SCRAPEGRAPH_CACHE_DAYS: '30'
+          SCRAPEGRAPH_MAX_FOUNDERS: '3'
       # catena: appena finisce un giro riuscito ne parte un altro, così il crawler lavora senza sosta
       # (il cron orario resta come rete di sicurezza: GitHub a volte salta o ritarda gli orari programmati).
       # Si ferma da sola se il crawler fallisce, così un errore non brucia minuti in un ciclo veloce.
@@ -43,18 +62,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-      # stima età di CEO e CTO delle migliori (Sage o Claude), con Brave e regole: non dipende da Sage
-      - if: always() && steps.crawl.outcome == 'success'
-        run: npm run founders -- 100
-        env:
-          SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
-          SHEET_API_TOKEN: ${{ secrets.SHEET_API_TOKEN }}
-          SEARCH_API_KEY: ${{ secrets.SEARCH_API_KEY }}
-          SCRAPEGRAPH_API_KEY: ${{ secrets.SCRAPEGRAPH_API_KEY }}
-          SCRAPEGRAPH_MAX_FOUNDERS: '3'
-          SCRAPEGRAPH_MAX_STARTUPS: '40'
-      - if: always() && steps.crawl.outcome == 'success'
-        run: gh workflow run crawl-startups.yml --ref main
+      # riparte subito solo se c'è altro lavoro (hub rimasti o candidati non controllati). Altrimenti si ferma:
+      # lo fa ripartire il crawler hub appena trova hub nuovi (il cron orario resta come rete di sicurezza).
+      # Tre tentativi: un riavvio fallito fermava la catena per ore.
+      - if: always() && steps.crawl.outcome == 'success' && steps.crawl.outputs.altro_lavoro == 'true'
+        run: for i in 1 2 3; do gh workflow run crawl-startups.yml --ref main && exit 0; sleep 20; done; exit 1
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

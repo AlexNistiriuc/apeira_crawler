@@ -110,6 +110,14 @@ test('pipeline completa', async () => {
   const cl = gas.sheets.get('Startup trovate').cells;
   assert.equal(cl.length, 2);
   assert.equal(cl[1][0], 'Qubo');
+  // lista di valutatori: basta uno dei due
+  gas.props.set('VISTA_RICHIEDE', 'claude, sage');
+  await gas.backend('views', {});
+  assert.equal(gas.sheets.get('Startup trovate').cells.length, 2, 'valutata da sage, basta');
+  // fatti nuovi: l'euristico esclude dopo il valutatore, la startup esce subito
+  await upsert('db_valutazioni', 'id', [{ id: 'qubo.ai|euristico', dominio: 'qubo.ai', classificatore: 'euristico', valutato_il: '2026-11-20 10:00:00', esito: 'Esclusa', motivo: 'fondata nel 2021 (registro imprese FR)' }]);
+  await gas.backend('views', {});
+  assert.equal(gas.sheets.get('Startup trovate').cells.length, 1, 'esclusa dai fatti del registro');
   const log = await read('db_log');
   assert.equal(log.length, 6);
 

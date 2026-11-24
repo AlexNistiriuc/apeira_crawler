@@ -11,6 +11,7 @@
     "hubs": "node src/crawlers/hubs/index.js",
     "startups": "node src/crawlers/startups/index.js",
     "classify": "node src/classifiers/run.js",
+    "realign": "node src/classifiers/realign.js",
     "test": "node --test test/*.test.js",
     "founders": "node src/crawlers/founders/index.js",
     "linkedin": "node src/crawlers/linkedin/index.js",

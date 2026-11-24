@@ -2,6 +2,7 @@
   "_nota": "Criteri rigidi di Alex (16 nov 2026). Unico posto dove cambiare le soglie: li leggono sia il crawler (prefiltro) sia i classificatori.",
   "min_founded_year": 2025,
   "max_founded_year": 2026,
+  "max_anni_lavoro_non_costituita": 3,
   "domain_young_from": "2024-01-01",
   "domain_border_from": "2023-01-01",
   "wayback_old_before_year": 2022,

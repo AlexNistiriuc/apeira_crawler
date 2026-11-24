@@ -10,16 +10,20 @@
 //  - scadenza RUN_MINUTES: smette di prendere candidati nuovi e salva;
 //  - a fine giro dice se in coda ne restano (per far ripartire la catena) e aggiorna la vista.
 import { appendFileSync } from 'node:fs';
-import { queue, logRun, views, writer, TABS } from '../lib/sheet.js';
+import { queue, read, logRun, views, writer, TABS } from '../lib/sheet.js';
 import { now } from '../lib/config.js';
 import { validateEvaluation } from './contract.js';
 import { ensureLinkedin, linkedinStats, resetLinkedinStats } from '../crawlers/linkedin/index.js';
+import { applyStrict } from './strict.js';
 
 export async function classifyQueue(clf, limit = 500, log = console.log, { deadline = Infinity, refreshView = false } = {}) {
   const startedAt = now();
   resetLinkedinStats();
   if (clf.init) await clf.init();
-  const rows = await queue(clf.name, limit, clf.rankBy, Boolean(clf.onlyNew));
+  // CON_FATTI=1: ripassa tutte le startup da valutare che hanno fatti dal crawler founder (dopo una modifica alle regole)
+  const rows = process.env.CON_FATTI === '1'
+    ? (await read(TABS.cand)).filter(c => c.fatti_il && c.stato_crawler === 'da_valutare').slice(0, limit)
+    : await queue(clf.name, limit, clf.rankBy, Boolean(clf.onlyNew));
   const out = writer(TABS.eval, 'id', clf.writeEvery || 200);
   const st = { classificatore: clf.name, in_coda: rows.length, scritte: 0, non_valide: 0, errori: 0, saltate_per_tempo: 0, esiti: {}, fit: {} };
   let fatal = null, i = 0;
@@ -33,8 +37,9 @@ export async function classifyQueue(clf, limit = 500, log = console.log, { deadl
       // per cui non ci sono). Non si può classificare senza passare da qui.
       try { c.li = await ensureLinkedin(c); }
       catch (err) { c.li = { disponibile: false, motivo: err.message }; }
-      // gli evaluator che leggono le colonne (Sage: c.eta_stimata) vedono subito gli stessi dati di c.li
-      if (c.li.disponibile) { c.eta_stimata = c.li.testo; c.fonti_eta = (c.li.fonti || []).join(', '); }
+      // gli evaluator vedono i dati LinkedIn anche nelle colonne dedicate (c.li resta la fonte);
+      // eta_stimata/fonti_eta/eta_il restano del crawler founder e non vengono sovrascritti
+      if (c.li.disponibile) { c.linkedin_dati = c.li.testo; c.linkedin_fonti = (c.li.fonti || []).join(', '); }
       let e;
       try { e = await clf.classify(c); }
       catch (err) {
@@ -43,7 +48,9 @@ export async function classifyQueue(clf, limit = 500, log = console.log, { deadl
         if (err.fatal) { fatal = err.message; }
         continue;
       }
-      const full = { id: `${c.dominio}|${clf.name}`, dominio: c.dominio, classificatore: clf.name, versione: clf.version, valutato_il: now(), ...e };
+      // criterio severo per tutti i classificatori: Alto solo con le cinque prove, Esclusa sempre Basso
+      const { _cambiata, ...full } = applyStrict({ id: `${c.dominio}|${clf.name}`, dominio: c.dominio, classificatore: clf.name, versione: clf.version, valutato_il: now(), ...e }, c);
+      if (_cambiata) st.corrette_dal_criterio = (st.corrette_dal_criterio || 0) + 1;
       const errs = validateEvaluation(full);
       if (errs.length) { st.non_valide++; log(`valutazione non valida per ${c.dominio}: ${errs.join('; ')}`); continue; }
       st.scritte++;
@@ -57,7 +64,7 @@ export async function classifyQueue(clf, limit = 500, log = console.log, { deadl
 
   if (fatal) st.fermato_per = fatal;
   st.linkedin = { ...linkedinStats };
-  if (clf.stats) { st.consumo = clf.stats(); if (st.consumo.ricerche_brave != null) st.ricerche_brave = st.consumo.ricerche_brave; }
+  if (clf.stats) { st.consumo = clf.stats(); if (st.consumo.ricerche_brave != null) st.ricerche_brave = st.consumo.ricerche_brave; if (st.consumo.ricerche_scrapegraph != null) st.ricerche_scrapegraph = st.consumo.ricerche_scrapegraph; }
   // altro lavoro: la coda era piena fino al limite, o è rimasto qualcosa per tempo o errori
   st.altro_lavoro = !fatal && (rows.length >= limit || st.saltate_per_tempo > 0);
   if (refreshView && st.scritte) { try { await views(); } catch (err) { log('vista non aggiornata: ' + err.message); } }

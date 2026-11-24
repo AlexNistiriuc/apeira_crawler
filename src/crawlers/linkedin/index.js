@@ -10,12 +10,14 @@
 // Uso da riga di comando (crawler autonomo, solo Alto/Medio):
 //   npm run linkedin -- [quante]
 //
-// Cache: se `eta_il` è recente e `eta_stimata` inizia con `[SG]`, non si richiama ScrapeGraph.
-// Scrittura: riusa le colonne esistenti `eta_stimata`, `fonti_eta`, `eta_il` (nessuna migrazione).
+// Cache: se `linkedin_il` è recente e `linkedin_dati` inizia con `[SG]`, non si richiama ScrapeGraph.
+// Scrittura: colonne dedicate `linkedin_dati`, `linkedin_fonti`, `linkedin_il`; le colonne del
+// crawler founder (eta_stimata, fonti_eta, eta_il) restano intatte.
 import { read, upsert, logRun, TABS } from '../../lib/sheet.js';
 import { now, today } from '../../lib/config.js';
-import { scrapegraphEnabled, search as sgSearch, extract as sgExtract, scrapeGraphStats } from '../../lib/scrapegraph.js';
-import { founderPeople, pickBest } from '../../signals/founders.js';
+import { provider, structuredSearch, searchStats, resetSearchStats } from '../../lib/search.js';
+import { pickPeople } from '../../signals/facts.js';
+import { pickBest } from '../founders/index.js';
 import { ageFromEducation, earliestStart, startYear, tenureText, band, parseYear } from '../../signals/age.linkedin.js';
 import euristico from '../../classifiers/euristico.js';
 
@@ -76,25 +78,21 @@ async function fitOf(c) {
   try { return (await euristico.classify({ ...c, ev: evidence(c) })).fit; } catch { return null; }
 }
 
-function cacheFresh(c, year = new Date().getFullYear()) {
-  if (!String(c.eta_stimata || '').startsWith(MARK) || !c.eta_il) return false;
-  const when = Date.parse(String(c.eta_il).replace(' ', 'T'));
-  if (!Number.isFinite(when)) return false;
-  return (Date.now() - when) / 86_400_000 <= cacheDays();
+function cacheText(c) {
+  if (String(c.linkedin_dati || '').startsWith(MARK)) return c.linkedin_dati;
+  return String(c.eta_stimata || '').startsWith(MARK) ? c.eta_stimata : '';
+}
+
+function cacheFresh(c) {
+  const text = cacheText(c);
+  const when = c.linkedin_il || c.eta_il;
+  if (!text || !when) return false;
+  const at = Date.parse(String(when).replace(' ', 'T'));
+  if (!Number.isFinite(at)) return false;
+  return (Date.now() - at) / 86_400_000 <= cacheDays();
 }
 
 // ---------------------------------------------------------------- estrazione
-
-const extractFallback = () => process.env.SCRAPEGRAPH_EXTRACT_FALLBACK === '1';
-
-/** Ripiego: se la ricerca non estrae JSON, legge una pagina non-LinkedIn tra i risultati. */
-async function extractFrom(results, prompt, schema) {
-  if (!extractFallback()) return null;
-  const url = (results || []).map(result => result.url).find(value => value && !/linkedin\.com/i.test(value));
-  if (!url) return null;
-  try { return (await sgExtract(url, { prompt, schema })).json; }
-  catch (error) { if (error.fatal || error.skip) throw error; linkedinStats.errori++; return null; }
-}
 
 /** La prima esperienza educativa, anche quando il modello la restituisce come lista. */
 function firstEducation(value) {
@@ -119,14 +117,13 @@ function samePerson(json, person, company) {
 
 async function linkedinCompany(c) {
   const name = c.nome || c.dominio;
-  const prompt = `Find the LinkedIn company page of "${name}" (website ${c.sito || c.dominio}). Extract the employee count or range and the founded year exactly as shown. Do not guess: use an empty string or null when the page does not show it.`;
-  const response = await sgSearch(`"${name}" linkedin company employees founded`, {
+  const prompt = `Find public information about "${name}" (website ${c.sito || c.dominio}). Extract the employee count or range and the founded year exactly as shown. Use public pages or search-result snippets; do not open linkedin.com. Do not guess: use an empty string or null when unknown.`;
+  const response = await structuredSearch(`"${name}" company employees founded`, {
     numResults: 5,
     prompt,
     schema: COMPANY_SCHEMA,
   });
-  let json = response.json;
-  if (!json) json = await extractFrom(response.results, prompt, COMPANY_SCHEMA) || {};
+  const json = response.json || {};
   const employees = clean(json.employees_range || json.employees, 40);
   const founded = parseYear(json.founded_year);
   return {
@@ -139,14 +136,13 @@ async function linkedinCompany(c) {
 
 async function linkedinFounder(person, c, year) {
   const company = c.nome || c.dominio;
-  const prompt = `Find the LinkedIn profile of ${person.nome}, ${person.ruolo} of ${company} (${c.sito || c.dominio}). Extract the month/year they started at this company, their role, and their FIRST (earliest) education entry with institution, degree, start year and end year. Do not guess: use null when unknown. Ignore namesakes and other companies.`;
-  const response = await sgSearch(`"${person.nome}" "${company}" linkedin`, {
+  const prompt = `Find public information about ${person.nome}, ${person.ruolo} of ${company} (${c.sito || c.dominio}). Extract the month/year they started at this company, their role, and their FIRST (earliest) education entry with institution, degree, start year and end year. Use public pages or search-result snippets; do not open linkedin.com. Ignore namesakes and other companies. Use null when unknown.`;
+  const response = await structuredSearch(`"${person.nome}" "${company}" founder`, {
     numResults: 4,
     prompt,
     schema: FOUNDER_SCHEMA,
   });
-  let json = response.json;
-  if (!json) json = await extractFrom(response.results, prompt, FOUNDER_SCHEMA) || {};
+  const json = response.json || {};
   if (!samePerson(json, person, company)) return null;
   const education = firstEducation(json.first_education);
   const start = json.start_at_company || '';
@@ -165,7 +161,7 @@ async function linkedinFounder(person, c, year) {
 }
 
 async function enrich(c, year) {
-  const people = founderPeople(c.founder_nomi).slice(0, maxFounders());
+  const people = pickPeople(c.founder_nomi).slice(0, maxFounders());
   const settle = async promise => { try { return { value: await promise }; } catch (error) { return { error }; } };
   // Azienda e founder sono indipendenti: in parallelo il tempo di parete resta quello di una chiamata.
   const [companyResult, ...founderResults] = await Promise.all([
@@ -268,10 +264,10 @@ export async function ensureLinkedin(c, { fit, force = false, write = true, year
       linkedinStats.cache++;
       return { ...MEM.get(c.dominio), fonte: 'cache' };
     }
-    if (cacheFresh(c, year)) {
-      const parsed = parseLinkedinText(c.eta_stimata);
+    if (cacheFresh(c)) {
+      const parsed = parseLinkedinText(cacheText(c));
       if (parsed) {
-        parsed.fonti = splitList(c.fonti_eta);
+        parsed.fonti = splitList(c.linkedin_fonti || c.fonti_eta);
         parsed.fonte = 'cache';
         if (c.dominio) MEM.set(c.dominio, parsed);
         linkedinStats.cache++;
@@ -279,7 +275,7 @@ export async function ensureLinkedin(c, { fit, force = false, write = true, year
       }
     }
   }
-  if (!scrapegraphEnabled()) {
+  if (provider() !== 'scrapegraph') {
     linkedinStats.non_disponibili++;
     return unavailable('SCRAPEGRAPH_API_KEY mancante');
   }
@@ -310,9 +306,9 @@ export async function ensureLinkedin(c, { fit, force = false, write = true, year
   if (write && c.dominio) {
     await upsert(TABS.cand, 'dominio', [{
       dominio: c.dominio,
-      eta_stimata: result.testo,
-      fonti_eta: result.fonti.join(', '),
-      eta_il: today(),
+      linkedin_dati: result.testo,
+      linkedin_fonti: result.fonti.join(', '),
+      linkedin_il: today(),
     }]);
   }
   return result;
@@ -322,15 +318,16 @@ export async function ensureLinkedin(c, { fit, force = false, write = true, year
 export async function run(n = 100, log = console.log) {
   const startedAt = now();
   resetLinkedinStats();
+  resetSearchStats();
   const st = { candidate: 0, disponibili: 0, cache: 0, non_disponibili: 0, saltati_fit: 0, errori: 0, founder: 0, dipendenti: 0 };
-  if (!scrapegraphEnabled()) {
+  if (provider() !== 'scrapegraph') {
     log('SCRAPEGRAPH_API_KEY mancante: crawler LinkedIn saltato');
     st.saltato = 'manca SCRAPEGRAPH_API_KEY';
     await logRun('crawler linkedin', startedAt, st);
     return st;
   }
   const cands = new Map((await read(TABS.cand, {
-    columns: ['dominio', 'nome', 'sito', 'founder_nomi', 'eta_il', 'eta_stimata', 'fonti_eta', 'evidenze'],
+    columns: ['dominio', 'nome', 'sito', 'founder_nomi', 'linkedin_dati', 'linkedin_fonti', 'linkedin_il', 'eta_il', 'eta_stimata', 'fonti_eta', 'evidenze'],
   })).map(c => [c.dominio, c]));
   const best = pickBest(await read(TABS.eval, { columns: ['dominio', 'classificatore', 'esito', 'fit', 'voto'] }), n)
     .map(v => ({ ...cands.get(v.dominio), _fit: v.fit }))
@@ -347,7 +344,7 @@ export async function run(n = 100, log = console.log) {
     errori: linkedinStats.errori,
     founder: linkedinStats.founder,
     dipendenti: linkedinStats.dipendenti,
-    scrapegraph: { ...scrapeGraphStats },
+    scrapegraph: { ...searchStats },
   });
   await logRun('crawler linkedin', startedAt, st);
   log(JSON.stringify(st));

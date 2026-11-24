@@ -33,8 +33,8 @@ export function estimateAge(name, sources, year = new Date().getFullYear()) {
   for (const s of sources) {
     for (const sent of aroundName(`${s.title || ''}. ${s.snippet || ''}`, name)) {
       let m;
-      if ((m = sent.match(/\b([1-6]\d)[- ]year[- ]old\b/i)) || (m = sent.match(/\b(?:aged?|età|alter)\s*:?\s*([1-6]\d)\b/i)) || (m = sent.match(/\b([1-6]\d)\s*(?:anni|jahre|ans|years)\b(?! of| experience| di esperienza)/i)))
-        found.push({ rank: 0, eta: +m[1], tipo: 'età dichiarata', prova: sent, fonte: s.url });
+      if ((m = sent.match(/\b([1-6]\d)[- ]year[- ]old\b/i)) || (m = sent.match(/\b(?:aged?|età|alter)\s*:?\s*([1-6]\d)\b/i)) || (m = sent.match(/\b([1-6]\d)\s*(?:anni|jahre|ans|years)\s+(?:old|alt|d'età|di età)\b/i)))
+        if (+m[1] >= 16) found.push({ rank: 0, eta: +m[1], tipo: 'età dichiarata', prova: sent, fonte: s.url });
       if ((m = sent.match(/\b(?:born|nato|nata|geboren|né|née)\b[^0-9]{0,15}(19[5-9]\d|200\d)\b/i)))
         found.push({ rank: 1, eta: year - +m[1], tipo: 'anno di nascita', prova: sent, fonte: s.url });
       for (const [re, at] of DEGREE) {

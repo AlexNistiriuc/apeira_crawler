@@ -14,7 +14,7 @@ import { read, upsert, logRun, TABS } from '../../lib/sheet.js';
 import { getPage } from '../../lib/http.js';
 import { host, reg, bad, links, hubKey } from '../../lib/url.js';
 import { now, today } from '../../lib/config.js';
-import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed } from '../../lib/search.js';
+import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed, searchLog, provider, sgCredits } from '../../lib/search.js';
 import { VCH, JUNKHUB } from '../../signals/patterns.js';
 import { hubType } from '../hubs/classify.js';
 
@@ -88,7 +88,7 @@ export function poolLinks(url, md, all = false) {
 export async function run({ log = console.log, deadline = Date.now() + CFG.minuti_per_giro * 60_000 } = {}) {
   const startedAt = now();
   const st = { domande: 0, risultati: 0, testati: 0, hub_nuovi: 0, da_verificare: 0, da_liste: 0, da_hub: 0 };
-  const hubs = await read(TABS.hub, { columns: ['hub_id', 'nome', 'url', 'origine', 'stato', 'candidati_trovati', 'candidati_da_valutare', 'scoperta_il'] });
+  const hubs = await read(TABS.hub, { columns: ['hub_id', 'nome', 'url', 'origine', 'stato', 'candidati_trovati', 'candidati_da_valutare', 'scoperta_il', 'ultimo_crawl'] });
   const have = new Set(hubs.map(h => h.hub_id));
   const add = [];
   let tests = 0;
@@ -138,7 +138,13 @@ export async function run({ log = console.log, deadline = Date.now() + CFG.minut
     const logRows = await read(TABS.log, { columns: ['componente', 'inizio', 'statistiche'] });
     setMonthlyUsed(monthlyUsed(logRows));
     const usedForDiscovery = monthlyUsed(logRows.filter(r => r.componente === 'scoperta hub'));
-    const budget = Math.max(0, Math.min(CFG.ricerche_per_giro, CFG.tetto_mensile_scoperta - usedForDiscovery));
+    // con ScrapeGraph nessun tetto mensile (si va finché ci sono crediti); con Brave il tetto dedicato alla scoperta
+    let budget = provider() === 'scrapegraph' ? CFG.ricerche_per_giro : Math.max(0, Math.min(CFG.ricerche_per_giro, CFG.tetto_mensile_scoperta - usedForDiscovery));
+    // il crawler startup ha già tanti hub mai letti: niente ricerche nuove finché non li smaltisce (crediti risparmiati)
+    const unread = hubs.filter(h => /^(attivo|da_verificare)$/.test(h.stato) && !h.ultimo_crawl).length;
+    if (unread > (CFG.pausa_se_hub_da_leggere ?? 80)) { budget = 0; st.pausa = `${unread} hub ancora da leggere`; }
+    // riserva per i valutatori: sotto questa soglia la scoperta non usa più crediti
+    if (budget && provider() === 'scrapegraph') { const cr = await sgCredits(); if (cr != null && cr < (CFG.riserva_crediti_valutatori ?? 5000)) { budget = 0; st.pausa = `crediti sotto la riserva per i valutatori (${cr})`; } }
     for (const p of pickQueries(new Set(byQ.keys()), stats, budget)) {
       const res = await webSearch(p.q, { count: 10 });
       st.domande++; st.risultati += res.length;
@@ -172,7 +178,8 @@ export async function run({ log = console.log, deadline = Date.now() + CFG.minut
   if (explored.length) await upsert(TABS.hub, 'hub_id', explored);
   if (updates.length) await upsert('db_scoperta', 'query', updates);
   st.hub_aggiunti = add.length;
-  st.ricerche_brave = searchStats.ricerche;
+  Object.assign(st, searchLog());
+  const cr = await sgCredits(); if (cr != null) st.crediti_scrapegraph_rimasti = cr;
   await logRun('scoperta hub', startedAt, st);
   log(JSON.stringify(st));
   return st;
@@ -182,5 +189,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   process.on('uncaughtException', e => console.error('errore imprevisto ignorato:', e?.message || e));
   run().then(st => {
     if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `hub_nuovi=${st.hub_aggiunti}\n`);
+    process.exit(0);
   }).catch(e => { console.error(e); process.exit(1); });
 }

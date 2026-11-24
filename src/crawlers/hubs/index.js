@@ -1,3 +1,4 @@
+import { appendFileSync } from 'node:fs';
 // Crawler degli hub. Non cerca startup: tiene aggiornata la lista delle fonti in db_hub.
 //  1. semi e directory da config/sources.json
 //  2. reti di incubatori (EBN, UKSPA...) -> ogni membro diventa un hub
@@ -67,5 +68,8 @@ export async function run({ deadline = deadlineFromNow(), log = console.log } = 
 if (import.meta.url === `file://${process.argv[1]}`) {
   process.on('uncaughtException', e => console.error('errore imprevisto ignorato:', e?.message || e));
   process.on('unhandledRejection', e => console.error('promessa rifiutata ignorata:', e?.message || e));
-  run().catch(e => { console.error(e); process.exit(1); });
+  run().then(st => {
+    if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `hub_nuovi=${(+st.semi || 0) + (+st.da_reti || 0) + (+st.da_snowball || 0)}\n`);
+    process.exit(0);
+  }).catch(e => { console.error(e); process.exit(1); });
 }

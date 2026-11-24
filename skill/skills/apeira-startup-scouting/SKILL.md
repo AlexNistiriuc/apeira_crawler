@@ -42,13 +42,13 @@ foundation models, defence.
 Evidence rules:
 - Founder age only from credible public statements of age. Never infer it from career history,
   graduation year or photos. The dedicated LinkedIn crawler writes an education-based estimate in
-  `eta_stimata` (prefixed `[SG]`): use it as a hint for where to look, never as proof.
+  `linkedin_dati` (prefixed `[SG]`): use it as a hint for where to look, never as proof.
 - Money in its announced currency with an approximate USD value, labelled grant, equity, prize or
   unknown. "Not disclosed" is not zero.
 - Lab access is one of: no evidence, shared or third-party, institutional, dedicated company lab,
   substantial established lab.
-- Headcount is approximate unless a team page or filing states it. A LinkedIn range in `eta_stimata`
-  (from the dedicated crawler) is a hint, not a verified headcount.
+- Headcount is approximate unless a team page or filing states it. A LinkedIn range in
+  `linkedin_dati` (from the dedicated crawler) is a hint, not a verified headcount.
 - Only publicly listed work emails, preferably a founder's. Never guess email patterns or use personal addresses.
 - First-party sources first. Mark inferences as inferences.
 - Investors, partners and organisations mentioned only as context are not prospects.
@@ -63,13 +63,14 @@ Outcomes:
 ## LinkedIn enrichment (crawler)
 
 `npm run linkedin` and every classifier run enrich Fit Alto/Medio candidates through ScrapeGraph
-(web search + structured extraction, no LinkedIn login). The result is written to `eta_stimata` with
-the `[SG]` prefix, sources in `fonti_eta` and the enrichment date in `eta_il`:
+(web search + structured extraction, no LinkedIn login). The result is written to `linkedin_dati`
+with the `[SG]` prefix, sources in `linkedin_fonti` and the enrichment date in `linkedin_il`
+(`eta_stimata`/`fonti_eta`/`eta_il` remain the founder crawler's columns):
 
 `[SG] Dipendenti: 11-50 | Fondata: 2025 | Founder: Anna Rossi (CEO) dal 2025-03 (1 anno), età ~26 (sotto 30)`
 
 It is a hint. Employee ranges are approximate and ages are derived from the first education entry.
-Never treat either as hard-gate proof. If `eta_stimata` does not start with `[SG]`, there is no
+Never treat either as hard-gate proof. If `linkedin_dati` does not start with `[SG]`, there is no
 LinkedIn enrichment for that row.
 
 ## Connecting to the sheet
@@ -119,6 +120,7 @@ or when the Sage classifier is unavailable.
      hub: c.hub_origine, reg: c.dominio_registrato, wb: c.primo_archivio, anni: c.anni_sul_sito,
      fund: c.segnali_funding, team: c.team_stima, em: c.email, fn: c.founder_nomi, li: c.linkedin_persone,
      age: c.eta_stimata, ageSrc: c.fonti_eta, ageAt: c.eta_il,
+     liData: c.linkedin_dati, liSrc: c.linkedin_fonti, liAt: c.linkedin_il,
      dem: c.domanda_reale, pre: [c.pre_esito, c.pre_fit, c.pre_voto, c.pre_motivo],
      ev: { fa: e.fa, ts: e.ts, evd: e.evd, eu: e.eu, tags: e.tags },
      home: (e.estratto_home || '').slice(0, 1200), teamtxt: (e.estratto_team || '').slice(0, 800) }; })
@@ -130,9 +132,9 @@ or when the Sage classifier is unavailable.
    - founding year, funding, team and founder ages from the startup's site and its pool's page;
    - one `web_search` for `"<name>" founders` or `"<name>" funding` when funding or age is the open
      question, and `web_fetch` on first-party or press results;
-   - LinkedIn: use the dedicated crawler's `eta_stimata`/`fonti_eta` (`[SG]` prefix: employees,
-     founded year, founder start dates, education-based ages) as discovery hints. Never open
-     linkedin.com pages.
+   - LinkedIn: use the dedicated crawler's `linkedin_dati`/`linkedin_fonti` (`[SG]` prefix:
+     employees, founded year, founder start dates, education-based ages) as discovery hints. Never
+     open linkedin.com pages.
    Spend effort where it changes the outcome: a candidate that is clearly `Esclusa` from the
    evidence needs no search. If budget runs out, write what you have as `Needs verification`.
 
@@ -141,18 +143,26 @@ or when the Sage classifier is unavailable.
    await api('upsert', { tab: 'db_valutazioni', key: 'id', rows: [ {
      id: 'qubo.ai|claude', dominio: 'qubo.ai', classificatore: 'claude', versione: 'skill-v9',
      valutato_il: '2026-11-18 08:40:00',
-     esito: 'Needs verification', fit: 'Alto', voto: 72,
+     esito: 'Needs verification', fit: 'Medio', voto: 62,
      motivo: 'quantum, fondata 2025, pilot con un operatore telecom; età dei founder non pubblica',
      fondazione: '2025 (dichiarato su qubo.ai/about)', grant: 'Not disclosed', investimenti: 'Not disclosed',
      accesso_lab: 'shared or third-party: TU Delft cleanroom', team: '3 (dichiarato sul sito)',
      eta_founder: 'non verificata', under30: 'no', domanda_reale: 'pilot con operatore telecom europeo',
-     da_verificare: 'età founder, investimenti', fonti: 'https://qubo.ai/about, https://...' } ] })
+     da_verificare: 'età verificata di ogni founder, investimenti', fonti: 'https://qubo.ai/about, https://...' } ] })
    ```
    Field meanings and allowed values are in `contracts/CLASSIFICATORI.md`. In short:
    - `esito`: `Qualificata` / `Needs verification` / `Esclusa`.
-   - `fit`: `Alto` / `Medio` / `Basso`.
-   - `voto` 0-100. Calibrate as follows: 85+ qualified with strong demand and fit; 60-84 promising,
-     still to verify; 30-59 weak fit; under 30 excluded or off-target.
+   - `fit`: `Alto` / `Medio` / `Basso`, with the strict rule (since 23 Nov 2026, `src/classifiers/strict.js`).
+     `Alto` only when all five are proven by a source, not inferred: founded 2025 or 2026 (registry or year
+     stated on the site, a domain date is not enough), or, if not yet incorporated, the founders have worked on it
+     for at most 3 years, proven by a source such as a LinkedIn profile checked by a person (write `fondazione` as
+     "non costituita, ci lavorano dal 2024 (fonte)"); age of EVERY founder verified (registry birth date or an
+     explicit source naming the person) and under 35; deep-tech sector proven (site, grant or registry
+     description); European angle; no hard criterion violated. `Medio` when nothing is violated but founding,
+     age or sector is unverified. `Basso` when a criterion is violated or off-target; `Esclusa` is always `Basso`.
+     A registry-only company without a site stays `Medio` with motivo "CANDIDATO ALTO DA REGISTRO".
+   - `voto` 0-100. Calibrate as follows: 85+ qualified with strong demand and a strict Alto; 70-84 strict Alto still to verify; 50-69 Medio;
+     30-49 weak fit; under 30 excluded or off-target.
    - `under30`: `sì` only when every founder's age under 30 is publicly stated.
    - Never write `nota_alex`.
    The sheet rejects invalid rows. If it answers `ok:false`, fix the row and retry.

@@ -1,6 +1,7 @@
 // Crawler delle startup. Legge gli hub attivi da db_hub, scopre i candidati, li controlla
 // e scrive ogni candidato in db_candidati. Aggiorna le statistiche degli hub letti.
 // Avvio: npm run startups   (variabili: SHEET_API_URL, SHEET_API_TOKEN, opzionali JINA_KEY, RUN_MINUTES)
+import { appendFileSync } from 'node:fs';
 import { read, upsert, writer, logRun, TABS } from '../../lib/sheet.js';
 import { host, reg, bad } from '../../lib/url.js';
 import { deadlineFromNow, now, SOURCES } from '../../lib/config.js';
@@ -23,7 +24,7 @@ const RECRAWL_DAYS = Number(process.env.RECRAWL_DAYS || 7);
 const MAX_HUBS = Number(process.env.MAX_HUBS || 400);
 const HUB_MAX_FAILS = 3;
 const RETRY_PER_RUN = Number(process.env.HUB_RETRY_PER_RUN || 15);
-const CAND_TIMEOUT_MS = 120_000;      // un candidato non può tenere occupato un lavoratore per più di 2 minuti
+const CAND_TIMEOUT_MS = 240_000;      // un candidato non può tenere occupato un lavoratore per più di 4 minuti (lettura del sito intero compresa)
 const HUB_TIMEOUT_MS = 8 * 60_000;    // un hub non può bloccare la scoperta per più di 8 minuti
 const MAX_QUEUE = 1500;               // oltre questa coda la scoperta aspetta: inutile trovare più di quanto si riesce a controllare
 
@@ -50,6 +51,7 @@ export async function run({ deadline = deadlineFromNow(), log = console.log } = 
 
   const out = writer(TABS.cand, 'dominio', 200);   // blocchi grandi: ogni scrittura nel foglio ha un costo fisso
   const hubOut = writer(TABS.hub, 'hub_id', 50);
+  const slowHosts = new Map();   // sito -> hub andati in timeout in questo giro
   const queue = [];                       // candidati nuovi da controllare
   const inRun = new Map();                // dominio -> candidato (dedup nel run)
   const extraHub = new Map();             // dominio noto -> nuovi hub da aggiungere a hub_origine
@@ -85,12 +87,28 @@ export async function run({ deadline = deadlineFromNow(), log = console.log } = 
         while (queue.length > MAX_QUEUE && Date.now() < deadline) await sleep(2000);
         if (Date.now() >= deadline) break;
         const h = due[i++];
+        const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
+        // sito che va in timeout su 2 hub: gli altri suoi hub di questo giro si rimandano subito, senza aspettare 8 minuti l'uno
+        if ((slowHosts.get(hostOf(h.url)) || 0) >= 2) {
+          const f = (+h.fallimenti || 0) + 1;
+          st.hub_scaduti = (st.hub_scaduti || 0) + 1;
+          await hubOut.push({ hub_id: h.hub_id, fallimenti: f, ultimo_crawl: now(), ...(f >= HUB_MAX_FAILS ? { stato: 'irraggiungibile' } : {}) });
+          continue;
+        }
         try {
           const ad = adapterFor(h.url);
           const conf = SOURCES.directories.find(x => x.adapter === ad);
           const job = ad ? runAdapter(ad, h, h.cursore || '', conf?.max_pages_per_run || 400) : discover(h, { deep: /^(rete|directory)/.test(h.origine || '') || h.tipo === 'directory', slow: !!h.retry });
           const r = await withTimeout(job, HUB_TIMEOUT_MS, null);
-          if (!r) { log(`hub ${h.nome.slice(0, 40)}: tempo scaduto, riprovo al prossimo run`); continue; }
+          if (!r) {
+            // tempo scaduto: conta come fallimento e va in fondo alla coda (prima restava in testa e bloccava ogni giro)
+            const f = (+h.fallimenti || 0) + 1;
+            st.hub_scaduti = (st.hub_scaduti || 0) + 1;
+            const hs = hostOf(h.url); slowHosts.set(hs, (slowHosts.get(hs) || 0) + 1);
+            log(`hub ${h.nome.slice(0, 40)}: tempo scaduto (${f}/${HUB_MAX_FAILS}), passa in fondo alla coda`);
+            await hubOut.push({ hub_id: h.hub_id, fallimenti: f, ultimo_crawl: now(), ...(f >= HUB_MAX_FAILS ? { stato: 'irraggiungibile' } : {}) });
+            continue;
+          }
           for (const it of r.found) offer(it, h.nome, !!ad);
           st.hub_letti++;
           if (h.retry) {
@@ -139,6 +157,10 @@ export async function run({ deadline = deadlineFromNow(), log = console.log } = 
   await hubOut.flush();
   await refreshHubStats(log);
 
+  // altro lavoro: hub rimasti fuori dal tetto del giro o candidati non controllati. Se no, la catena si ferma
+  // e la fa ripartire il crawler hub quando trova hub nuovi (così non gira un'ora per 3 startup).
+  st.hub_da_leggere = due.length;
+  st.altro_lavoro = due.length >= MAX_HUBS || st.rimandati > 0 || st.hub_letti < due.length;
   Object.assign(st, { http: httpStats });
   await logRun('crawler startup', startedAt, st);
   log('fine run', JSON.stringify(st));
@@ -167,5 +189,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   // un errore imprevisto su un singolo sito non deve uccidere un giro da 45 minuti
   process.on('uncaughtException', e => console.error('errore imprevisto ignorato:', e?.message || e));
   process.on('unhandledRejection', e => console.error('promessa rifiutata ignorata:', e?.message || e));
-  run().catch(e => { console.error(e); process.exit(1); });
+  run().then(st => {
+    if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `altro_lavoro=${st.altro_lavoro}\nhub_letti=${st.hub_letti}\n`);
+    // fine esplicita: timer e connessioni rimaste aperte tenevano vivo il processo fino a 40 minuti dopo la fine del lavoro
+    process.exit(0);
+  }).catch(e => { console.error(e); process.exit(1); });
 }

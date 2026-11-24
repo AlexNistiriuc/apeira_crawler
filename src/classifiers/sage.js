@@ -9,13 +9,16 @@
 //    di buono (fit alto, voto >= 60, o qualificata) si rifà subito in modalità completa.
 // Le escluse dall'euristico non arrivano mai a Sage (zero crediti).
 // I consumi di ogni giro finiscono in db_log (statistiche.consumo).
+import { strictAlto } from './strict.js';
 import { getPage } from '../lib/http.js';
 import { links, host, reg } from '../lib/url.js';
 import { extract } from '../crawlers/startups/row.js';
-import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed } from '../lib/search.js';
+import { webSearch, searchEnabled, searchStats, monthlyUsed, setMonthlyUsed, searchLog, provider } from '../lib/search.js';
 import { read, TABS } from '../lib/sheet.js';
 import { CRITERIA as C } from '../lib/config.js';
 import euristico from './euristico.js';
+import { parseJson } from '../signals/facts.js';
+import { fundingNews } from '../crawlers/founders/index.js';
 
 const DEFAULT_URL = 'https://sage.levanto.ai';
 const MIN_QUALIFY_PROBABILITY = 0.85;
@@ -31,9 +34,9 @@ const OUTCOME_OPTIONS = [
 ];
 
 const FIT_OPTIONS = [
-  { option: 'high', description: 'Strong European deep-tech fit, technical founders, real demand, very early stage, and a public work contact.' },
-  { option: 'medium', description: 'Plausible but incomplete fit; demand is weak or one preferred element is missing.' },
-  { option: 'low', description: 'Off-target, weakly deep-tech, non-European, too mature, or lacking convincing signals.' },
+  { option: 'high', description: 'Only if all five are proven by a source, not inferred: founded in 2025 or 2026 (company registry or year stated on the site), or not yet incorporated with the founders working on it for at most 3 years, proven by a source; age of EVERY founder verified (registry or explicit public source) and under 35; deep-tech sector proven by the site, a grant or the registry description; European angle; no hard criterion violated.' },
+  { option: 'medium', description: 'No hard criterion violated, but founding year, the age of every founder or the deep-tech sector is not yet verified by a source.' },
+  { option: 'low', description: 'At least one hard criterion violated, or off-target: weakly deep-tech, non-European, too mature.' },
 ];
 
 const FIT_TO_SHEET = { high: 'Alto', medium: 'Medio', low: 'Basso' };
@@ -115,8 +118,14 @@ function candidateContent(c, baseline, webResearch = [], site = null) {
     demand: { summary: trim(c.domanda_reale, 1000), evidence: ev.dem },
     public_contact_available: Boolean(c.email || c.linkedin_persone),
     deep_tech: { score: ev.deep, negative_score: ev.neg, strong_signals: ev.strong, tags: ev.tags },
-    page_extracts: site && site.length ? site : { home: trim(ev.estratto_home, 3000), team: trim(ev.estratto_team, 2000) },
+    page_extracts: site && site.length ? site : {
+      home: trim(ev.estratto_home, 3000), team: trim(ev.estratto_team, 2000),
+      ...(ev.sito ? { careers: trim(ev.estratto_careers, 1500), blog_news: trim(ev.estratto_blog, 2500), about: trim(ev.estratto_about, 1500), investors: trim(ev.estratto_investors, 1000), technology: trim(ev.estratto_tech, 1000) } : {}),
+    },
+    whole_site_read_by_crawler: ev.sito ? { pages: ev.sito.pages ?? ev.sito.pagine, open_positions_found: ev.sito.posizioni_aperte, big_site: ev.sito.grande, pages_by_type: ev.sito.per_tipo } : 'no (home and team only)',
     founder_age_estimate_from_crawler: c.eta_stimata || 'not estimated',
+    verified_founder_ages_from_crawler: parseJson(c.eta_verificate, []),
+    company_registry_from_crawler: parseJson(c.registro) || 'not found or not checked',
     deterministic_check: baseline,
     web_research: webResearch,
     sources: trim(c.pagine_lette || c.sito, 1500),
@@ -127,7 +136,8 @@ function candidateContent(c, baseline, webResearch = [], site = null) {
     rules: [
       'Use only the supplied evidence. Do not assume missing facts.',
       'Not disclosed is unknown, never zero.',
-      'Founder age counts only when publicly stated; estimates, photos and graduation years do not verify age.',
+      'Founder age counts only when publicly stated or taken from an official company registry (verified_founder_ages_from_crawler); estimates, photos and graduation years do not verify age.',
+      'An official registry incorporation date beats years on the website. A UK capital increase (SH01) or a VC portfolio listing suggests a round already happened: note it and lower fit and score, do not exclude for it alone.',
       'Use the supplied web research only for this exact startup. Prefer first-party pages, filings and credible press; ignore namesakes and generic startup-advice pages.',
       'LinkedIn may be checked only through public search-result snippets or LinkedIn links already published on the startup website. Never open or scrape linkedin.com.',
       'LinkedIn career history and headcount ranges are discovery hints only. They never verify founder age or exact team size.',
@@ -347,6 +357,8 @@ const SITE_MAX_CHARS = Number(process.env.SAGE_SITE_CHARS || 20000);
 /** Rilegge il sito della startup al momento (home + fino a 3 pagine utili), solo in memoria: non si salva niente. */
 export async function readSite(c) {
   if (process.env.SAGE_READ_SITE === '0' || !c.sito) return null;
+  // il crawler ha già letto tutto il sito: si usano i suoi estratti, niente seconda lettura
+  try { if (JSON.parse(c.evidenze || '{}').sito) return null; } catch {}
   const home = await getPage(c.sito, { maxJinaBacklog: 4 });
   if (home.status !== 200 || !home.text) return null;
   const dom = String(c.dominio || '').toLowerCase();
@@ -361,14 +373,12 @@ export async function readSite(c) {
   return pages.filter(p => (total += p.text.length) <= SITE_MAX_CHARS);
 }
 
-/** Notizie di funding e premi: una ricerca Brave del crawler, filtrata sul dominio o sul nome. */
+/** Notizie di funding e premi: quelle già salvate dal crawler founder; se mancano, la stessa ricerca Brave. */
 async function pressSearch(c) {
+  const saved = parseJson(c.notizie_funding);
+  if (Array.isArray(saved)) return saved;
   if (!searchEnabled()) return [];
-  const name = c.nome || c.dominio;
-  const res = await webSearch(`"${name}" funding OR raises OR "pre-seed" OR seed OR grant OR award`);
-  const dom = String(c.dominio || '').toLowerCase(), nm = String(name).toLowerCase();
-  return res.filter(x => { const h = `${x.url} ${x.title} ${x.snippet}`.toLowerCase(); return h.includes(dom) || (nm.length > 4 && h.includes(nm)); })
-    .slice(0, 6).map(x => ({ title: trim(x.title, 200), url: x.url, snippet: trim(x.snippet, 1200) }));
+  return fundingNews(c);
 }
 
 function wantsFull(baseline) {
@@ -389,7 +399,7 @@ export default {
   onlyNew: process.env.SAGE_SOLO_NUOVE !== '0',
   parallel: Number(process.env.SAGE_PARALLEL || 3),
   writeEvery: 10,
-  stats: () => ({ ...usage, ricerche_brave: searchStats.ricerche }),
+  stats: () => ({ ...usage, ...searchLog() }),
   /** A inizio giro: quante ricerche Brave sono già state usate nel mese. */
   async init() { if (searchEnabled()) setMonthlyUsed(monthlyUsed(await read(TABS.log, { columns: ['inizio', 'statistiche'] }))); },
 
@@ -414,7 +424,9 @@ export default {
     const sage = response.decisions;
     const gate = sage.soglia?.chosen;
     const esito = safeOutcome(sage.esito, baseline, gate);
-    const fit = FIT_TO_SHEET[sage.fit.chosen] || baseline.fit;
+    let fit = FIT_TO_SHEET[sage.fit.chosen] || baseline.fit;
+    if (fit === 'Alto' && !c.fatti_il) fit = 'Medio';   // senza i fatti del crawler founder (round, età, registro) niente Alto
+    if (fit === 'Alto' && !strictAlto(c).ok) fit = 'Medio'; // criterio severo (strict.js)
     const voto = safeScore(sage.voto.expectation, esito);
     const downgraded = sage.esito.chosen === 'qualified' && esito !== 'Qualificata';
     const sageExcluded = esito === 'Esclusa' && baseline.esito !== 'Esclusa';

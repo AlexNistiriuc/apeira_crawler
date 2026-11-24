@@ -1,4 +1,7 @@
-// Ricerca web per i crawler (non per Sage): Brave Search API.
+// Ricerca web per i crawler: ScrapeGraph se c'è SCRAPEGRAPH_API_KEY (scelta di Alex, 22 nov 2026), altrimenti Brave.
+// ScrapeGraph (v2 /api/search) restituisce le pagine trovate col loro contenuto: se ne tiene un estratto come snippet.
+// Le pagine di linkedin.com si escludono dalla ricerca e dai risultati: non si leggono pagine di LinkedIn.
+// Con ScrapeGraph non c'è tetto mensile: si va finché ci sono crediti (alla prima risposta 402 si smette per il giro).
 // Costa circa 5 $ ogni 1.000 ricerche, con 5 $ di credito gratuito al mese (circa 1.000 ricerche).
 // Senza SEARCH_API_KEY restituisce sempre [] e chi la usa va avanti senza.
 // Limite del piano: 1 richiesta al secondo; SEARCH_MAX_PER_RUN tetto di sicurezza per giro.
@@ -11,6 +14,11 @@ const MAX_PER_RUN = Number(process.env.SEARCH_MAX_PER_RUN || 400);
 // smette di cercare fino al mese dopo (Sage lavora col solo sito). Il conteggio viene da db_log.
 const MONTH_CAP = Number(process.env.SEARCH_MONTH_CAP || 950);
 let usedThisMonth = 0;
+
+/** Ricerche del giro per provider, da scrivere in db_log (ricerche_brave conta per il tetto mensile di Brave). */
+export function searchLog() {
+  return provider() === 'scrapegraph' ? { ricerche_scrapegraph: searchStats.ricerche, ricerche_brave: 0 } : { ricerche_brave: searchStats.ricerche };
+}
 
 /** Somma le ricerche Brave del mese corrente registrate in db_log (campo ricerche_brave di ogni giro). */
 export function monthlyUsed(logRows, month = new Date().toISOString().slice(0, 7)) {
@@ -30,10 +38,98 @@ let impl = (...a) => fetch(...a);
 /** Solo per i test. */
 export function setSearchFetch(fn) { impl = fn; }
 
-export const searchEnabled = () => Boolean(process.env.SEARCH_API_KEY);
+export const provider = () => (process.env.SCRAPEGRAPH_API_KEY ? 'scrapegraph' : process.env.SEARCH_API_KEY ? 'brave' : '');
+export const searchEnabled = () => Boolean(provider());
+const SG_ENDPOINT = process.env.SCRAPEGRAPH_ENDPOINT || 'https://v2-api.scrapegraphai.com/api/search';
+const SG_RESULTS = Number(process.env.SCRAPEGRAPH_RESULTS || 5);
+let sgOut = false;   // crediti finiti: niente altre chiamate in questo giro
+
+/** Solo per i test: azzera contatori e lo stato "crediti finiti". */
+export function resetSearchStats() {
+  searchStats.ricerche = 0;
+  searchStats.errori = 0;
+  searchStats.saltate_tetto = 0;
+  searchStats.scrapegraph = 0;
+  delete searchStats.crediti_finiti;
+  sgOut = false;
+}
+
+/** Estratto leggibile dal markdown di una pagina: niente link, immagini e menu; le frasi con le parole cercate prima. */
+export function snippetOf(md, q, n = 1500) {
+  const t = String(md || '').replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[#*_>`|]/g, ' ').replace(/\s+/g, ' ').trim();
+  const words = String(q || '').toLowerCase().replace(/"/g, '').split(/\s+|\bor\b/).filter(w => w.length >= 4 && !/^(site|and|the)/.test(w));
+  const sents = t.split(/(?<=[.!?])\s+/);
+  const hit = sents.filter(x => words.some(w => x.toLowerCase().includes(w)));
+  const out = [...new Set([...hit, ...sents])].join(' ');
+  return out.slice(0, n);
+}
+
+async function sgSearch(q, count) {
+  if (sgOut) { searchStats.saltate_tetto++; return []; }
+  searchStats.ricerche++;
+  searchStats.scrapegraph = (searchStats.scrapegraph || 0) + 1;
+  try {
+    const r = await impl(SG_ENDPOINT, {
+      method: 'POST', signal: AbortSignal.timeout(90000),
+      headers: { 'Content-Type': 'application/json', 'SGAI-APIKEY': process.env.SCRAPEGRAPH_API_KEY },
+      body: JSON.stringify({ query: `${q} -site:linkedin.com`, numResults: Math.min(count, SG_RESULTS), format: 'markdown' }),
+    });
+    if (r.status === 402 || r.status === 403) { sgOut = true; searchStats.crediti_finiti = true; searchStats.errori++; return []; }
+    if (!r.ok) { searchStats.errori++; return []; }
+    const j = await r.json();
+    return (j?.results || j?.data?.results || []).filter(x => !/linkedin\.com/i.test(String(x.url || '')))
+      .map(x => ({ title: String(x.title || ''), url: String(x.url || ''), snippet: snippetOf(x.content || x.markdown || '', q) }));
+  } catch { searchStats.errori++; return []; }
+}
+
+/**
+ * Ricerca ScrapeGraph con estrazione strutturata (prompt + schema JSON).
+ * Usata dal crawler LinkedIn: la pagina non si legge, si estrae dai risultati di ricerca.
+ * Lancia un errore con `skip: true` quando i crediti o il tetto del giro sono finiti,
+ * e con `fatal: true` su chiave non valida.
+ * @returns {Promise<{json: object|null, results: Array<{title:string,url:string,snippet:string}>}>}
+ */
+export async function structuredSearch(q, { numResults = 5, prompt, schema, timeout = 90000 } = {}) {
+  if (provider() !== 'scrapegraph') return { json: null, results: [] };
+  if (sgOut) { searchStats.saltate_tetto++; throw Object.assign(new Error('crediti ScrapeGraph finiti'), { skip: true }); }
+  if (searchStats.ricerche >= MAX_PER_RUN) { searchStats.saltate_tetto++; throw Object.assign(new Error('tetto ricerche per giro raggiunto'), { skip: true }); }
+  searchStats.ricerche++;
+  searchStats.scrapegraph = (searchStats.scrapegraph || 0) + 1;
+  try {
+    const body = { query: `${q} -site:linkedin.com`, numResults: Math.min(numResults, SG_RESULTS), format: 'markdown' };
+    if (prompt) body.prompt = prompt;
+    if (schema) body.schema = schema;
+    const r = await impl(SG_ENDPOINT, {
+      method: 'POST', signal: AbortSignal.timeout(timeout),
+      headers: { 'Content-Type': 'application/json', 'SGAI-APIKEY': process.env.SCRAPEGRAPH_API_KEY },
+      body: JSON.stringify(body),
+    });
+    if (r.status === 402 || r.status === 403) {
+      sgOut = true; searchStats.crediti_finiti = true; searchStats.errori++;
+      throw Object.assign(new Error('crediti ScrapeGraph finiti'), { skip: true });
+    }
+    if (!r.ok) {
+      searchStats.errori++;
+      throw Object.assign(new Error(`ScrapeGraph ${r.status}`), { fatal: r.status === 401 });
+    }
+    const j = await r.json();
+    const json = j?.json ?? j?.data?.json ?? null;
+    const results = (j?.results || j?.data?.results || []).filter(x => !/linkedin\.com/i.test(String(x.url || '')))
+      .map(x => ({ title: String(x.title || ''), url: String(x.url || ''), snippet: snippetOf(x.content || x.markdown || '', q) }));
+    return { json, results };
+  } catch (error) {
+    if (error.skip || error.fatal) throw error;
+    searchStats.errori++;
+    throw Object.assign(new Error(`ScrapeGraph: ${error.message}`), { fatal: false });
+  }
+}
 
 /** @returns {Promise<Array<{title:string,url:string,snippet:string}>>} */
 export async function webSearch(q, { count = 8 } = {}) {
+  if (provider() === 'scrapegraph') {
+    if (searchStats.ricerche >= MAX_PER_RUN) { searchStats.saltate_tetto++; return []; }
+    return sgSearch(q, count);
+  }
   const key = process.env.SEARCH_API_KEY;
   if (!key) return [];
   if (searchStats.ricerche >= MAX_PER_RUN || usedThisMonth + searchStats.ricerche >= MONTH_CAP) { searchStats.saltate_tetto++; return []; }
@@ -52,4 +148,15 @@ export async function webSearch(q, { count = 8 } = {}) {
       snippet: [x.description, ...(x.extra_snippets || [])].filter(Boolean).join(' … ').replace(/<[^>]+>/g, ''),
     }));
   } catch { searchStats.errori++; return []; }
+}
+
+/** Crediti ScrapeGraph rimasti (null se non disponibile): finisce nel registro dei giri. */
+export async function sgCredits() {
+  if (provider() !== 'scrapegraph') return null;
+  try {
+    const r = await impl((process.env.SCRAPEGRAPH_CREDITS || 'https://v2-api.scrapegraphai.com/api/credits'), { headers: { 'SGAI-APIKEY': process.env.SCRAPEGRAPH_API_KEY }, signal: AbortSignal.timeout(15000) });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j.remaining ?? j.remaining_credits ?? null;
+  } catch { return null; }
 }

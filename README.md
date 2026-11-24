@@ -24,7 +24,7 @@ scrivono, ognuno solo nelle sue colonne:
 | --- | --- | --- |
 | crawler hub | aggiunge pool: semi, reti di incubatori (EBN, UKSPA), snowball dai siti delle startup | GitHub Actions, alla fine di ogni giro del crawler startup |
 | crawler startup | legge i pool, trova i siti delle startup, controlla età, funding, settore, team, contatti, salva le evidenze | GitHub Actions, a catena senza sosta (giri da ~45 minuti) |
-| crawler LinkedIn | per le startup Alto/Medio chiama ScrapeGraph e ricava dipendenti, anno di fondazione, data di inizio dei founder ed età stimata dalla prima esperienza educativa; scrive `eta_stimata`, `fonti_eta`, `eta_il` | dentro ogni classificazione (black box `ensureLinkedin`) e con `npm run linkedin` / workflow `crawler LinkedIn` |
+| crawler LinkedIn | per le startup Alto/Medio chiama ScrapeGraph e ricava dipendenti, anno di fondazione, data di inizio dei founder ed età stimata dalla prima esperienza educativa; scrive `linkedin_dati`, `linkedin_fonti`, `linkedin_il` (le colonne del crawler founder restano separate) | dentro ogni classificazione (black box `ensureLinkedin`) e con `npm run linkedin` / workflow `crawler LinkedIn` |
 | classificatore euristico | i criteri rigidi della v1, come base di confronto | subito dopo ogni giro del crawler startup |
 | classificatore Sage | decide esito, fit e voto dopo l'euristico; completo (ricerca web + reasoning) per Fit Alto/Medio, leggero per Fit Basso | GitHub Actions, dopo ogni giro del crawler e a catena finché la coda non è vuota |
 | Claude con la skill | verifica manuale delle fonti e fallback | su richiesta |
@@ -33,7 +33,15 @@ Il crawler non dà voti: scarta solo ciò che è certo (round già chiuso, fonda
 azienda grande, investitore, non deep tech, dominio vecchio) e passa tutto il resto ai classificatori
 con le evidenze. Così si può cambiare modello di classificazione senza toccare i crawler.
 
-Solo le startup valutate da Sage entrano in **Startup trovate** (proprietà di script `VISTA_RICHIEDE`, default `sage`).
+In **Startup trovate** entrano le startup valutate da uno dei valutatori elencati nella proprietà di script
+`VISTA_RICHIEDE` (es. `sage,claude`: basta uno dei due). Se dopo la valutazione l'euristico le esclude per fatti
+nuovi (registro imprese, età verificate, notizie di round), escono subito.
+
+**Crawler founder** (`npm run founders`, dopo l'euristico): per le startup migliori raccoglie una volta sola
+registro imprese (Francia gratis; Regno Unito con il secret `COMPANIES_HOUSE_KEY`, chiave gratuita di Companies House),
+età dei founder e notizie di funding. Le età da registro o dichiarate con nome e cognome sono verificate e possono
+escludere (35 anni o più); le stime ordinano soltanto. Le notizie salvate le riusano Sage e Claude senza nuove ricerche.
+Portfolio VC: nota e penalità, non esclusione.
 
 **Fermare tutto lo scouting:** Settings > Secrets and variables > Actions > Variables, crea la variabile
 `SCOUTING_ATTIVO` con valore `no`. I giri in corso finiscono, i successivi non partono. Per ripartire cancellala.
@@ -50,9 +58,9 @@ contracts/schema.json        colonne e valori ammessi di ogni tab
 contracts/CLASSIFICATORI.md  come si attacca un classificatore
 apps-script/Code.gs          web app che trasforma il foglio in database (read, upsert, queue, vista)
 src/lib/                     rete (diretta + Jina, robots.txt), HTML, foglio, configurazione
-src/lib/scrapegraph.js       client ScrapeGraph v2 (search + extract) con tetto crediti
+src/lib/search.js            ricerca web (ScrapeGraph v2 o Brave) e ricerca strutturata per il crawler LinkedIn
 src/signals/                 euristiche pure: settori, funding, età, team, evidenze, prefiltro
-src/signals/founders.js      parsing dei nomi founder e scelta delle startup migliori
+src/signals/facts.js         nomi founder, età verificate, notizie di funding (condivisi)
 src/signals/age.linkedin.js  età dalla prima esperienza educativa e anzianità in azienda
 src/crawlers/hubs/           crawler degli hub
 src/crawlers/startups/       crawler delle startup (scoperta, directory, controllo, riga)
@@ -113,26 +121,27 @@ const li = await ensureLinkedin(c);
 ```
 
 Il runner dei classificatori (`src/classifiers/run.js`) la chiama **prima di ogni `classify`** e
-mette il risultato in `c.li`: nessun evaluator può saltarla. Euristico e Sage leggono `c.li` e
-vedono anche `eta_stimata`/`fonti_eta` salvati in `db_candidati`.
+mette il risultato in `c.li`: nessun evaluator può saltarla. Euristico e Sage leggono `c.li`; i
+dati sono salvati in `linkedin_dati`/`linkedin_fonti`/`linkedin_il`, senza toccare `eta_stimata`,
+`fonti_eta` e `eta_il` del crawler founder.
 
-- Fonte: ScrapeGraph v2 `search` (ricerca web + estrazione in una chiamata), mai login o scraping
-  diretto di linkedin.com. I dati LinkedIn restano indizi, non prove per le soglie rigide.
+- Fonte: ScrapeGraph v2 `search` con prompt e schema JSON (ricerca web + estrazione in una
+  chiamata), mai login o scraping diretto di linkedin.com. I dati LinkedIn restano indizi, non
+  prove per le soglie rigide.
 - Cosa estrae: numero di dipendenti e anno di fondazione dall'azienda; per ogni founder la data di
   inizio in azienda e la **prima esperienza educativa**. L'età è `anno corrente - inizio studi + 18`
   (oppure `anno di fine + 22/24/28` a seconda del titolo).
-- Cache: `eta_il` recente + `eta_stimata` che inizia con `[SG]` (default 30 giorni,
-  `SCRAPEGRAPH_CACHE_DAYS`). Nessuna colonna nuova: si riusano `eta_stimata`, `fonti_eta`, `eta_il`.
-- Tetti: `SCRAPEGRAPH_MAX_PER_RUN` (chiamate per processo, default 120),
+- Cache: `linkedin_il` recente + `linkedin_dati` che inizia con `[SG]` (default 30 giorni,
+  `SCRAPEGRAPH_CACHE_DAYS`). Le colonne sono dedicate, quindi il crawler founder continua a usare
+  `eta_stimata`/`fonti_eta`/`eta_il` per le sue stime e i suoi fatti.
+- Tetti: `SEARCH_MAX_PER_RUN` (chiamate per processo, default 400; il workflow LinkedIn lo abbassa),
   `SCRAPEGRAPH_MAX_STARTUPS` (startup per giro, default 40),
-  `SCRAPEGRAPH_MAX_FOUNDERS` (profili per startup, default 3).
-- Tempi: `SCRAPEGRAPH_TIMEOUT_MS` (default 30 s) e `SCRAPEGRAPH_RETRY_MS` (default 1 s, raddoppia
-  a ogni tentativo). Con `SCRAPEGRAPH_EXTRACT_FALLBACK=1`, se `search` non estrae JSON, prova
-  `extract` su una pagina non-LinkedIn tra i risultati.
+  `SCRAPEGRAPH_MAX_FOUNDERS` (profili per startup, default 3), `SCRAPEGRAPH_RESULTS`
+  (risultati per ricerca, default 5).
 - Omonimi: il profilo del founder entra solo se cognome e azienda tornano; un profilo di un'altra
   persona non viene conteggiato.
-- Fallback: se ScrapeGraph manca o non trova nulla, `npm run founders` usa la stima Brave +
-  regole già esistente per CEO e CTO.
+- Fallback: il crawler LinkedIn non ripiega su Brave; se ScrapeGraph manca o non trova nulla,
+  `c.li.disponibile` è `false` e `npm run founders` continua a usare la sua stima Brave + regole.
 - Comandi: `npm run linkedin -- [quante]` (crawler autonomo) e workflow `crawler LinkedIn`
   (ogni 3 ore, spegnibile con la variabile `SCRAPEGRAPH_ATTIVO = no`).
 
@@ -152,7 +161,9 @@ IndexedDB. La v2 è Node, gira su GitHub Actions e tiene tutto nel foglio. Le eu
 stesse (portate 1:1 in `src/signals/patterns.js` e `scan.js`), con queste differenze:
 
 - età minima allineata ai criteri rigidi: fondazione dal 2025 (`config/criteria.json`);
-- il Fit non lo decide più il crawler ma il classificatore;
+- il Fit non lo decide più il crawler ma il classificatore, con il criterio severo dal 23 novembre 2026
+  (Alto solo con fondazione, età di ogni founder, settore e angolo europeo provati; vedi
+  `contracts/CLASSIFICATORI.md` e `src/classifiers/strict.js`);
 - nuovo segnale di domanda reale (clienti, pilot, contratti) ed estratti di testo per i modelli;
 - risolto il bug del regex `VCN` con caratteri di controllo al posto di `\b`;
 - non portati: il seed da Y Combinator (sono già finanziate) e il miner di startbase.de (resa bassa).
