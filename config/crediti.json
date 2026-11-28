@@ -1,4 +1,4 @@
 {
-  "pausa": false,
-  "_nota": "28 nov 2026: ricerche ScrapeGraph riaccese su richiesta per il crawler founder sulle 45 Alto/Medio della valutazione claude-28nov; da rimettere true a fine giro (soglia concordata: 10.000 crediti). Con pausa true nessuna ricerca web (scoperta hub, ricerca dei siti da registro, crawler founder, crawler LinkedIn)."
+  "pausa": true,
+  "_nota": "28 nov 2026: rimessa in pausa dopo il crawler founder sulle 45 Alto/Medio di claude-28nov (riaccese per quel giro). Soglia concordata: 10.000 crediti. Con pausa true nessuna ricerca web (scoperta hub, ricerca dei siti da registro, crawler founder, crawler LinkedIn); hub, crawler startup, registri ed euristico continuano senza crediti. Rimettere false per riaccendere."
 }
